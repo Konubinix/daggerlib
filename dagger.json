@@ -1,5 +1,5 @@
 {
-  "name": "dind",
+  "name": "lib",
   "engineVersion": "v0.20.3",
   "sdk": {
     "source": "python"
