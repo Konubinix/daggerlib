@@ -1,4 +1,4 @@
-# [[file:../../readme.org::*Module entry point][Module entry point:2]]
+# [[file:../../TECHNICAL.org::*Module entry point][Module entry point:2]]
 """Reusable container helpers: base images, timezone, user setup, DinD, etc."""
 
 from dagger import object_type
@@ -31,8 +31,10 @@ from .user import as_user, setup_user, use_user, user_write_env
 
 @object_type
 class Lib:
+    alpine_version: str = "3.23"
     debian_version: str = "13"
     debian_min_version: str = "2"
+    pip_tools_python_version: str = "3.8"
 
     # Alpine
     alpine_tz_fr = alpine_tz_fr

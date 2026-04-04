@@ -26,8 +26,8 @@ def alpine_tz_fr(self, ctr: dagger.Container) -> dagger.Container:
 # [[file:../alpine.org::*A base Alpine container with optional extra packages][A base Alpine container with optional extra packages:1]]
 @function
 def alpine(self, extra_packages: str = "") -> dagger.Container:
-    """Alpine 3.23 with Europe/Paris timezone and optional extra packages."""
-    ctr = dag.container().from_("alpine:3.23")
+    """Alpine with Europe/Paris timezone and optional extra packages."""
+    ctr = dag.container().from_(f"alpine:{self.alpine_version}")
     ctr = self.alpine_tz_fr(ctr)
     if extra_packages:
         ctr = ctr.with_exec(

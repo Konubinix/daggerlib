@@ -54,8 +54,10 @@ programming setup, tangling pipeline, and editor configuration. See
 
   @object_type
   class Lib:
+      alpine_version: str = "3.23"
       debian_version: str = "13"
       debian_min_version: str = "2"
+      pip_tools_python_version: str = "3.8"
 
       # Alpine
       alpine_tz_fr = alpine_tz_fr

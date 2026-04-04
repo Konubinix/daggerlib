@@ -1,4 +1,4 @@
-;; [[file:readme.org::*Check-result noweb macro][Check-result noweb macro:1]]
+;; [[file:TECHNICAL.org::*Check-result noweb macro][Check-result noweb macro:1]]
 ;;; check-result.el --- Noweb macros for test scripts
 
 (unless (fboundp 'first) (defalias 'first #'car))

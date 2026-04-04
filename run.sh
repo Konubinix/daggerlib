@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# [[file:readme.org::*Run script][Run script:1]]
+# [[file:TECHNICAL.org::*Run script][Run script:1]]
 # Execute org-babel blocks and save results.
 # Usage:
 #   ./run.sh                    # run all doc org files

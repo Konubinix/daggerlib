@@ -73,8 +73,8 @@ from dagger import dag, function
   #+begin_src python
   @function
   def alpine(self, extra_packages: str = "") -> dagger.Container:
-      """Alpine 3.23 with Europe/Paris timezone and optional extra packages."""
-      ctr = dag.container().from_("alpine:3.23")
+      """Alpine with Europe/Paris timezone and optional extra packages."""
+      ctr = dag.container().from_(f"alpine:{self.alpine_version}")
       ctr = self.alpine_tz_fr(ctr)
       if extra_packages:
           ctr = ctr.with_exec([

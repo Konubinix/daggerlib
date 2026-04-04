@@ -1,4 +1,4 @@
-;; [[file:readme.org::*Tangle configuration][Tangle configuration:1]]
+;; [[file:TECHNICAL.org::*Tangle configuration][Tangle configuration:1]]
 ;;; tangle.el --- Self-contained org-babel tangling for dagger lib -*- lexical-binding: t; -*-
 
 ;; Don't prompt for code block evaluation

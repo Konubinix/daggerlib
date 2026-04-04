@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# [[file:readme.org::*Tangle script][Tangle script:1]]
+# [[file:TECHNICAL.org::*Tangle script][Tangle script:1]]
 # Tangle org files without requiring personal Emacs configuration.
 # Usage:
 #   ./tangle.sh                          # tangle all org files with :tangle directives
@@ -58,7 +58,7 @@ tangle_file() {
 }
 
 if [ $# -eq 0 ]; then
-    for f in "$SCRIPT_DIR"/readme.org "$SCRIPT_DIR"/src/*.org "$SCRIPT_DIR"/tests/*.org; do
+    for f in "$SCRIPT_DIR"/readme.org "$SCRIPT_DIR"/TECHNICAL.org "$SCRIPT_DIR"/src/*.org "$SCRIPT_DIR"/tests/*.org; do
         [ -f "$f" ] && grep -q ':tangle' "$f" && tangle_file "$f" || true
     done
 else

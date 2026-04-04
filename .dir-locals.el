@@ -1,4 +1,4 @@
-;; [[file:readme.org::*Editor configuration][Editor configuration:1]]
+;; [[file:TECHNICAL.org::*Editor configuration][Editor configuration:1]]
 ((org-mode
   . ((org-babel-default-header-args:python
       . ((:preserve-indentation . t)))
