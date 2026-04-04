@@ -79,7 +79,6 @@ pushd "${CLK__PROJECT}" > /dev/null
         | tee "${LOG_FILE}" \
         | python3 -u -c '
 import sys, json, re
-W = 120
 level = "normal"
 RST = "\033[0m"
 TAG_COLORS = {
@@ -92,16 +91,11 @@ TAG_COLORS = {
     "[think]":  "\033[90m",   # grey
     "[event]":  "\033[37m",   # white
     "[ralph]":  "\033[90m",   # grey
+    "[verbose]": "\033[90m",  # grey
 }
 def out(icon, msg):
     c = TAG_COLORS.get(icon, "")
-    line = f"{c}{icon}{RST} {msg}"
-    # truncate on visible width (exclude ANSI escape bytes)
-    visible = f"{icon} {msg}"
-    if len(visible) > W:
-        excess = len(visible) - W
-        line = line[:-excess]
-    print(line, flush=True)
+    print(f"{c}{icon}{RST} {msg}", flush=True)
 for raw in sys.stdin:
     raw = raw.strip()
     # wrapper messages (always processed)
@@ -119,14 +113,12 @@ for raw in sys.stdin:
     if level == "json":
         print(raw, flush=True)
         continue
-    # verbose mode: print every line, truncated
-    if level == "verbose":
-        print(raw[:W], flush=True)
-        continue
+    # verbose mode: fall through to normal processing,
+    # unmatched lines get a parsed JSON summary at the end
     # think mode: normal + thinking content
     if level == "think":
         if "thinking" in raw.lower() or "antml:thinking" in raw:
-            out("[think]", raw[:W-10])
+            out("[think]", raw)
             continue
     # event emissions
     if "Event emitted" in raw:
@@ -163,6 +155,31 @@ for raw in sys.stdin:
         continue
     if re.search(r"FAILED|failed", raw) and "test_use_case" in raw:
         out("[FAIL]", "TEST FAILED")
+        continue
+    # verbose catch-all: parse JSON and show type/role summary
+    if level == "verbose":
+        try:
+            j = json.loads(raw)
+            t = j.get("type", "?")
+            msg = j.get("message", {})
+            role = msg.get("role", "")
+            content = msg.get("content", "")
+            if isinstance(content, list):
+                parts = []
+                for c in content:
+                    if isinstance(c, dict):
+                        parts.append(c.get("type", "?"))
+                    else:
+                        parts.append(str(c)[:80])
+                content = ", ".join(parts)
+            summary = f"{t}"
+            if role:
+                summary += f"/{role}"
+            if content:
+                summary += f": {content}"
+            out("[verbose]", summary)
+        except (json.JSONDecodeError, AttributeError):
+            out("[verbose]", raw)
         continue
 ' && \
         echo "[ralph.run] dagger completed successfully" || \
