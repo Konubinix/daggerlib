@@ -81,9 +81,27 @@ pushd "${CLK__PROJECT}" > /dev/null
 import sys, json, re
 W = 120
 level = "normal"
+RST = "\033[0m"
+TAG_COLORS = {
+    "[git]":    "\033[33m",   # yellow
+    "[tool]":   "\033[36m",   # cyan
+    "[file]":   "\033[35m",   # magenta
+    "[grep]":   "\033[34m",   # blue
+    "[PASS]":   "\033[32m",   # green
+    "[FAIL]":   "\033[31m",   # red
+    "[think]":  "\033[90m",   # grey
+    "[event]":  "\033[37m",   # white
+    "[ralph]":  "\033[90m",   # grey
+}
 def out(icon, msg):
-    line = f"{icon} {msg}"
-    print(line[:W], flush=True)
+    c = TAG_COLORS.get(icon, "")
+    line = f"{c}{icon}{RST} {msg}"
+    # truncate on visible width (exclude ANSI escape bytes)
+    visible = f"{icon} {msg}"
+    if len(visible) > W:
+        excess = len(visible) - W
+        line = line[:-excess]
+    print(line, flush=True)
 for raw in sys.stdin:
     raw = raw.strip()
     # wrapper messages (always processed)
