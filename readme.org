@@ -1,20 +1,17 @@
-#+TITLE: Lib — reusable container helpers
+#+TITLE: Reusable container helpers for Dagger
 #+LANGUAGE: en
 
-Lib is a Dagger module that provides pre-configured container images
-and reusable helpers for common tasks: timezone setup, user creation,
-Python virtualenvs, and Docker-in-Docker. All code and tests live in
-org files and are tangled into Python modules and shell test scripts.
+daggerlib is a [[https://docs.dagger.io/features/programmable-pipelines][Dagger]] module that gives you pre-configured container
+images for everyday tasks: setting timezones, creating non-root users,
+managing Python virtualenvs, running Docker-in-Docker, and more.
 
-* Testing
+Pick a base image, compose the helpers you need, and get a ready-to-use
+container in a single =dagger call=.
 
-  Run the full test suite:
+*Note:* daggerlib is /not/ Dagger itself — it is a library of helpers
+that builds on top of Dagger.
 
-  #+begin_src bash
-  ./test.sh -v
-  #+end_src
-
-* Use cases
+* What can I do with it?
 
   Most services I deploy run in France, so the first thing I need is a
   container with the correct timezone. [[file:src/alpine.org][Alpine]] is my default base image —
@@ -46,482 +43,35 @@ org files and are tangled into Python modules and shell test scripts.
   All of this is verified by [[file:tests/testing.org][automated tests]] that exercise every target
   via =dagger call=.
 
-* Dagger concepts
-
-  [[https://docs.dagger.io/features/programmable-pipelines][Dagger]] is a programmable CI/CD engine that runs every step inside a
-  container. Instead of writing YAML pipelines, you write functions in
-  Python (or Go, TypeScript, …) that describe what each container should
-  look like. The Dagger SDK provides a fluent API to build and
-  manipulate those containers. Here are the SDK primitives used in this
-  project, with links to the [[https://docs.dagger.io/api/reference][API reference]]:
-
-  - =dag.container()= ([[https://docs.dagger.io/api/reference#definition-Container][Container]]) — creates a new, empty container.
-    This is the starting point for any pipeline step.
-  - =.from_(image)= — sets the base image, like =FROM= in a Dockerfile.
-  - =.with_exec([cmd])= — runs a command inside the container, like
-    =RUN= in a Dockerfile. Every shell command you see in the code
-    blocks below goes through =with_exec=.
-  - =.with_exec([cmd], insecure_root_capabilities=True)= — same, but
-    with elevated privileges (needed for Docker-in-Docker).
-  - =.with_env_variable(name, value)= — sets an environment variable
-    (like =ENV=).
-  - =.with_env_variable(name, value, expand=True)= — sets an
-    environment variable, expanding =$VAR= references in the value so
-    you can prepend to =PATH= without hard-coding it.
-  - =.with_workdir(path)= — changes the working directory (like
-    =WORKDIR=).
-  - =.with_user(username)= — switches the active user (like =USER=).
-  - =.with_file(path, file)= — copies a [[https://docs.dagger.io/api/reference#definition-File][File]] artifact into the
-    container (like =COPY=). Used to inject timezone files into
-    distroless images that can't run a package manager.
-  - =.file(path)= — extracts a single file from a container as a =File=
-    artifact you can pass around.
-  - =.directory(path)= — extracts a directory from a container as a
-    [[https://docs.dagger.io/api/reference#definition-Directory][Directory]] artifact (used to export a pre-built virtualenv).
-  - =dag.directory()= — creates a new, empty =Directory= to assemble
-    file artifacts into (used for timezone file bundles).
-  - =@function= — decorator that exposes a Python method as a callable
-    Dagger function (invokable via =dagger call=).
-  - =@object_type= — decorator that defines a Dagger module class
-    grouping =@function= methods.
-
-* Module entry point
-  :PROPERTIES:
-  :ID:       48120ecb-7e3c-4cdb-8856-8304b784e40e
-  :END:
-
-  The =__init__.py= simply re-exports the =Lib= class:
-
-  #+begin_src python :tangle src/lib/__init__.py
-  """Reusable container helpers: base images, timezone, user setup, DinD, etc."""
-
-  from .main import Lib as Lib
-  #+end_src
-
-  The =main.py= defines the =@object_type= class that composes all the
-  functions defined in the use-case org files:
-
-  #+begin_src python :tangle src/lib/main.py
-  """Reusable container helpers: base images, timezone, user setup, DinD, etc."""
-
-  from dagger import object_type
-
-  from .alpine import (
-      alpine,
-      alpine_python,
-      alpine_python_user_venv,
-      alpine_tz,
-      alpine_tz_fr,
-      alpine_user,
-  )
-  from .debian import (
-      debian,
-      debian_apt_cleanup,
-      debian_europe_paris,
-      debian_no_auto_install,
-      debian_python_user_venv,
-      debian_tz_fr,
-      debian_user,
-      python_venv,
-  )
-  from .dind import dind_container, dind_with_docker
-  from .distroless import distroless_debian, distroless_python3_debian, distroless_tz_fr
-  from .flask_venv import flask_venv
-  from .pip_tools import pip_tools
-  from .ralph import ralph
-  from .user import as_user, setup_user, use_user, user_write_env
-
-
-  @object_type
-  class Lib:
-      debian_version: str = "13"
-      debian_min_version: str = "2"
-
-      # Alpine
-      alpine_tz_fr = alpine_tz_fr
-      alpine = alpine
-      alpine_user = alpine_user
-      alpine_tz = alpine_tz
-      alpine_python = alpine_python
-      alpine_python_user_venv = alpine_python_user_venv
-
-      # Debian
-      debian_no_auto_install = debian_no_auto_install
-      debian_tz_fr = debian_tz_fr
-      debian_apt_cleanup = debian_apt_cleanup
-      debian = debian
-      debian_user = debian_user
-      debian_python_user_venv = debian_python_user_venv
-      debian_europe_paris = debian_europe_paris
-      python_venv = python_venv
-
-      # Distroless
-      distroless_tz_fr = distroless_tz_fr
-      distroless_python3_debian = distroless_python3_debian
-      distroless_debian = distroless_debian
-
-      # User
-      setup_user = setup_user
-      as_user = as_user
-      use_user = use_user
-      user_write_env = user_write_env
-
-      # Pip tools
-      pip_tools = pip_tools
-
-      # Flask
-      flask_venv = flask_venv
-
-      # DinD
-      dind_container = dind_container
-      dind_with_docker = dind_with_docker
-
-      # Ralph
-      ralph = ralph
-  #+end_src
-
-* Editor configuration
-  :PROPERTIES:
-  :ID:       d36cf7bf-faac-46a9-9150-4031c8f06ca6
-  :END:
-
-  The =.dir-locals.el= ensures that Emacs preserves Python indentation
-  inside org code blocks. Without this, =C-c '= (org-edit-special) would
-  re-indent Python code relative to the org heading level.
-
-  #+begin_src emacs-lisp :tangle .dir-locals.el
-    ((org-mode
-      . ((org-babel-default-header-args:python
-          . ((:preserve-indentation . t)))
-         (org-id-link-to-org-use-id . nil)
-         (eval . (load (expand-file-name "check-result.el"
-                         (locate-dominating-file default-directory ".dir-locals.el"))
-                       t)))))
-  #+end_src
-
-* Development
-
-  The org files are the source of truth. The Python modules, test scripts,
-  and =tangle.sh= itself are all generated. To regenerate everything from
-  scratch:
+* Running the tests
 
   #+begin_src bash
-  rm -rf src/lib/alpine.py src/lib/debian.py src/lib/dind.py \
-         src/lib/distroless.py src/lib/flask_venv.py src/lib/pip_tools.py \
-         src/lib/user.py src/lib/main.py src/lib/__init__.py \
-         tests/*.sh tests/test_use_cases.py \
-         tangle.sh tangle.el test.sh
-  dagger develop
-  ./tangle.sh
+  ./test.sh -v
   #+end_src
 
-* Check-result noweb macro
+* How it works
 
-  The =check-result= and =check-all= noweb macros transform test script
-  blocks during tangling. =check-result(name)= expands into shell
-  functions that compare actual command output against cached
-  =#+RESULTS= blocks. =check-all= expands to =check-result(name)= for
-  every named bash block in the file (except =init=), so test scripts
-  don't need to list blocks manually.
+  The source of truth lives in org files (literate programming). Python
+  modules and shell scripts are generated from those files via tangling.
+  See [[file:TECHNICAL.org][TECHNICAL.org]] for the full details on the build pipeline and
+  editor setup.
 
-  This is loaded both by =tangle.el= (batch) and =.dir-locals.el=
-  (interactive), so tangling works the same way everywhere.
+* Dagger concepts
 
-  #+begin_src emacs-lisp :tangle check-result.el
-  ;;; check-result.el --- Noweb macros for test scripts
+  If you're new to Dagger: instead of writing YAML pipelines, you write
+  functions in Python (or Go, TypeScript, …) that describe what each
+  container should look like. The Dagger SDK provides a fluent API to
+  build and manipulate those containers. Here are the key primitives
+  used in this project, with links to the [[https://docs.dagger.io/api/reference][API reference]]:
 
-  (unless (fboundp 'first) (defalias 'first #'car))
-  (unless (fboundp 'second) (defalias 'second #'cadr))
-
-  (defun dagger-tangle--get-cached-result (name)
-    "Extract the #+RESULTS content for block NAME from the current org buffer.
-  Handles both `: value` and `#+begin_example...#+end_example` formats."
-    (save-match-data
-    (save-excursion
-      (goto-char (point-min))
-      (when (re-search-forward
-             (format "^[ \t]*#\\+RESULTS\\[.*\\]:[ \t]+%s[ \t]*$" (regexp-quote name))
-             nil t)
-        (forward-line 1)
-        (let ((start (point))
-              (lines nil))
-          (cond
-           ;; #+begin_example block — include trailing newline to match org-babel behavior
-           ((looking-at "^[ \t]*#\\+begin_example")
-            (forward-line 1)
-            (while (not (looking-at "^[ \t]*#\\+end_example"))
-              (let ((line (buffer-substring-no-properties
-                           (line-beginning-position) (line-end-position))))
-                (push line lines))
-              (forward-line 1))
-            (concat (mapconcat #'identity (nreverse lines) "\n") "\n"))
-           ;; : prefixed results
-           (t
-            (while (looking-at "^[ \t]*: \\(.*\\)$\\|^[ \t]*:$")
-              (let ((line (or (match-string 1) "")))
-                (push line lines))
-              (forward-line 1))
-            (mapconcat #'identity (nreverse lines) "\n"))))))))
-
-  (defun dagger-tangle--all-check-results ()
-    "Return check-result lines for all named bash blocks (except init)."
-    (let (names)
-      (save-excursion
-        (goto-char (point-min))
-        (while (re-search-forward
-                "^[ \t]*#\\+NAME:[ \t]+\\([a-zA-Z0-9_-]+\\)[ \t]*\n[ \t]*#\\+begin_src bash"
-                nil t)
-          (let ((name (match-string 1)))
-            (unless (string= name "init")
-              (push name names)))))
-      (mapconcat (lambda (n) (format "check-result(%s)" n))
-                 (nreverse names) "\n")))
-
-  (defun konix/org-babel-expand-noweb-references/add-check-result (orig-func info &optional parent-buffer context)
-    (let* ((code (second info))
-           (src-buf (or parent-buffer (current-buffer))))
-      ;; Expand check-all into check-result(name) for every named bash block
-      (setq code (replace-regexp-in-string
-                  "^[ \t]*check-all[ \t]*$"
-                  (lambda (_) (save-match-data
-                                (with-current-buffer src-buf
-                                  (dagger-tangle--all-check-results))))
-                  code nil t))
-      ;; Expand each check-result(name) into shell test functions
-      (setq code
-            (replace-regexp-in-string
-             "^[ \t]*check-result(\\([a-zA-Z0-9_-]+\\))"
-             (lambda (match)
-               (let* ((name (match-string 1 match))
-                      (result (save-match-data
-                                (with-current-buffer src-buf
-                                  (dagger-tangle--get-cached-result name)))))
-                 (concat
-                  "\n" name "_code () {\n"
-                  "      <<" name ">>\n"
-                  "}\n"
-                  "\n" name "_expected () {\n"
-                  "      cat<<\"EOEXPECTED\"\n"
-                  (or result "") "\n"
-                  "EOEXPECTED\n"
-                  "}\n"
-                  "\necho 'Run " name "'\n"
-                  "\n{ " name "_code || true ; } > \"${TMP}/code.txt\" 2>/dev/null\n"
-                  name "_expected > \"${TMP}/expected.txt\"\n"
-                  "diff -uBw \"${TMP}/code.txt\" \"${TMP}/expected.txt\" || {\n"
-                  "echo \"Something went wrong when trying " name "\"\n"
-                  "exit 1\n"
-                  "}\n")))
-             code nil t))
-      (funcall
-       orig-func
-       ;; info with the code replaced
-       (cons (first info) (cons code (cddr info)))
-       parent-buffer)))
-  (advice-add 'org-babel-expand-noweb-references :around 'konix/org-babel-expand-noweb-references/add-check-result)
-
-  ;;; check-result.el ends here
-  #+end_src
-
-* Tangle configuration
-  :PROPERTIES:
-  :ID:       0474ada9-a621-4c1a-97aa-270cf96e32c4
-  :END:
-
-  When =tangle.sh= runs Emacs in batch mode, it loads =tangle.el= to
-  configure org-babel before tangling. This ensures that tangled files
-  get link comments pointing back to their source block (=:comments yes=)
-  and blank lines between blocks (=:padline yes=). It also loads a pinned
-  org-mode version from =.tangle-deps/= for reproducibility and registers
-  the bash and python babel languages.
-
-  #+begin_src emacs-lisp :tangle tangle.el
-  ;;; tangle.el --- Self-contained org-babel tangling for dagger lib -*- lexical-binding: t; -*-
-
-  ;; Don't prompt for code block evaluation
-  (setq org-confirm-babel-evaluate nil)
-
-  ;; Load pinned org-mode from .tangle-deps BEFORE anything else loads the
-  ;; built-in org.  This must happen before (require 'ob-shell) since that
-  ;; transitively loads org.
-  (let ((org-lisp-dir
-         (expand-file-name ".tangle-deps/org/lisp"
-                           (file-name-directory (or load-file-name buffer-file-name)))))
-    (when (file-directory-p org-lisp-dir)
-      (push org-lisp-dir load-path)
-      (let ((contrib (expand-file-name "../contrib/lisp" org-lisp-dir)))
-        (when (file-directory-p contrib)
-          (push contrib load-path)))
-      ;; Force load of pinned org (unload built-in if already loaded)
-      (require 'org)))
-
-  ;; Load babel languages needed for tangling
-  (require 'ob-shell)
-  (require 'ob-python)
-
-  ;; Add link comments and blank lines between blocks in tangled output
-  (setq org-babel-default-header-args
-        (cons '(:comments . "yes")
-              (cons '(:padline . "yes")
-                    (assq-delete-all :comments
-                      (assq-delete-all :padline
-                        org-babel-default-header-args)))))
-
-  ;; Preserve indentation in Python blocks so that org-level indentation
-  ;; does not interfere with Python's significant whitespace.
-  (add-to-list 'org-babel-default-header-args:python
-               '(:preserve-indentation . t))
-
-  ;; Load check-result noweb macro support (shared with interactive Emacs
-  ;; via .dir-locals.el).
-  (load (expand-file-name "check-result.el"
-           (file-name-directory (or load-file-name buffer-file-name)))
-        t)
-
-  ;;; tangle.el ends here
-  #+end_src
-
-* Tangle script
-  :PROPERTIES:
-  :ID:       0474c6e4-ce96-4f94-8254-1824581b9f8f
-  :END:
-
-  This script tangles all org files (this one and the doc files) into
-  their target Python and shell files. It pins an org-mode version for
-  reproducible output and uses =tangle.el= for configuration.
-
-  #+begin_src bash :tangle tangle.sh :shebang "#!/usr/bin/env bash"
-  # Tangle org files without requiring personal Emacs configuration.
-  # Usage:
-  #   ./tangle.sh                          # tangle all org files with :tangle directives
-  #   ./tangle.sh src/foo.org    # tangle a specific file
-  set -eu
-
-  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-
-  # Pin org-mode version for reproducible tangle output
-  ORG_PIN="1025e3b49a98f175b124dbccd774918360fe7e11"
-  ORG_DIR="$SCRIPT_DIR/.tangle-deps/org"
-  if [ ! -d "$ORG_DIR" ]; then
-      echo "Cloning pinned org-mode ($ORG_PIN)..."
-      mkdir -p "$SCRIPT_DIR/.tangle-deps"
-      git clone --quiet https://git.savannah.gnu.org/git/emacs/org-mode.git "$ORG_DIR"
-      git -C "$ORG_DIR" checkout --quiet "$ORG_PIN"
-      # Generate org-loaddefs.el and org-version.el (needed for org to load properly)
-      emacs --batch --no-init-file \
-          --eval "(progn
-                    (push \"$ORG_DIR/lisp\" load-path)
-                    (require 'autoload)
-                    (setq generated-autoload-file \"$ORG_DIR/lisp/org-loaddefs.el\")
-                    (update-directory-autoloads \"$ORG_DIR/lisp\"))" 2>/dev/null
-      ORG_GIT_VERSION=$(git -C "$ORG_DIR" describe --tags --match "release_*" 2>/dev/null || echo "N/A")
-      ORG_RELEASE=$(echo "$ORG_GIT_VERSION" | sed 's/^release_//;s/-.*//')
-      (cd "$ORG_DIR/lisp" && emacs --batch --no-init-file \
-          --eval "(progn
-                    (push \"$ORG_DIR/lisp\" load-path)
-                    (load \"$ORG_DIR/mk/org-fixup.el\")
-                    (org-make-org-version \"$ORG_RELEASE\"
-                                          \"$ORG_GIT_VERSION\"))") 2>/dev/null || true
-  fi
-
-  tangle_file() {
-      local orgfile="$1"
-      echo "Tangling $orgfile..."
-      local tangled_list
-      tangled_list=$(emacs --batch --no-init-file \
-          -l "$SCRIPT_DIR/tangle.el" \
-          --eval "(progn
-                    (require 'org)
-                    (find-file \"$orgfile\")
-                    (let ((files (org-babel-tangle)))
-                      (dolist (f files) (princ (format \"%s\n\" f))))
-                    (kill-buffer))" 2>&1 | grep -E '^/' || true)
-      # Post-process tangled files
-      for f in $tangled_list; do
-          [ -f "$f" ] || continue
-          # Strip trailing whitespace
-          sed -i 's/[[:space:]]*$//' "$f"
-          # Format Python files
-          case "$f" in
-              *.py) ruff format --quiet "$f" 2>/dev/null || true ;;
-          esac
-      done
-  }
-
-  if [ $# -eq 0 ]; then
-      for f in "$SCRIPT_DIR"/readme.org "$SCRIPT_DIR"/src/*.org "$SCRIPT_DIR"/tests/*.org; do
-          [ -f "$f" ] && grep -q ':tangle' "$f" && tangle_file "$f" || true
-      done
-  else
-      for f in "$@"; do
-          tangle_file "$(realpath "$f")"
-      done
-  fi
-  #+end_src
-
-* Run configuration
-  :PROPERTIES:
-  :ID:       0ee81e6f-f3c5-444a-9c36-ea8d777ede25
-  :END:
-
-  Like =tangle.el= configures tangling, =run.el= configures batch
-  execution of org-babel blocks. It provides =dagger-run-file= to
-  execute all named bash blocks and save the results. The =dagger=
-  wrapper in =tests/= handles suppressing TUI noise (see
-  =testing.org=).
-
-  #+begin_src emacs-lisp :tangle run.el
-    ;;; run.el --- Batch-execute org-babel bash blocks -*- lexical-binding: t; -*-
-
-    (defun dagger-run-file (orgfile)
-      "Execute all named bash blocks in ORGFILE and save the results."
-      (find-file orgfile)
-      (let ((org-babel-sh-command "bash --norc"))
-        (org-babel-map-src-blocks nil
-          (let ((name (org-element-property :name (org-element-at-point))))
-            (when (and (string= lang "bash") name)
-              (message "%s Executing %s..." (format-time-string "%H:%M:%S") name)
-              (org-babel-execute-src-block)))))
-      (save-buffer)
-      (kill-buffer))
-
-    ;;; run.el ends here
-  #+end_src
-
-* Run script
-  :PROPERTIES:
-  :ID:       b275b2e3-ea23-4ca8-b69a-f7dd4e11d56a
-  :END:
-
-  This script executes all org-babel blocks in the doc files and saves
-  the results. It populates the =#+RESULTS:= blocks used by
-  =check-result= for test verification.
-
-  #+begin_src bash :tangle run.sh :shebang "#!/usr/bin/env bash"
-    # Execute org-babel blocks and save results.
-    # Usage:
-    #   ./run.sh                    # run all doc org files
-    #   ./run.sh src/foo.org        # run a specific file
-    set -eu
-
-    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-
-    run_file() {
-        local orgfile="$1"
-        echo "Running $orgfile..."
-        emacs --batch --no-init-file \
-            -l "$SCRIPT_DIR/tangle.el" \
-            -l "$SCRIPT_DIR/run.el" \
-            --eval "(dagger-run-file \"$orgfile\")" 2>&1 || true
-    }
-
-    if [ $# -eq 0 ]; then
-        for f in "$SCRIPT_DIR"/src/*.org; do
-            [ -f "$f" ] && run_file "$f"
-        done
-    else
-        for f in "$@"; do
-            run_file "$(realpath "$f")"
-        done
-    fi
-  #+end_src
+  - [[https://docs.dagger.io/api/reference#definition-Container][=dag.container()=]] — creates a new, empty container.
+  - [[https://docs.dagger.io/api/reference#Container-from][=.from_(image)=]] — sets the base image (like =FROM= in a Dockerfile).
+  - [[https://docs.dagger.io/api/reference#Container-withExec][=.with_exec([cmd])=]] — runs a command inside the container (like =RUN=).
+  - [[https://docs.dagger.io/api/reference#Container-withEnvVariable][=.with_env_variable(name, value)=]] — sets an environment variable.
+  - [[https://docs.dagger.io/api/reference#Container-withWorkdir][=.with_workdir(path)=]] — changes the working directory.
+  - [[https://docs.dagger.io/api/reference#Container-withUser][=.with_user(username)=]] — switches the active user.
+  - [[https://docs.dagger.io/api/reference#Container-withFile][=.with_file(path, file)=]] — copies a file into the container.
+  - [[https://docs.dagger.io/api/reference#Container-file][=.file(path)=]] — extracts a single file from a container.
+  - [[https://docs.dagger.io/api/reference#Container-directory][=.directory(path)=]] — extracts a directory from a container.
+  - [[https://docs.dagger.io/api/reference#definition-Function][=@function=]] / [[https://docs.dagger.io/api/reference#definition-Module][=@object_type=]] — decorators that expose Python
+    methods as callable Dagger functions (invokable via =dagger call=).
