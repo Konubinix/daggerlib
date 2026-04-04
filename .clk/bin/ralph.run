@@ -53,6 +53,7 @@ cleanup () {
     rm -f "${PID_FILE}"
     if [ -n "${CONSUL_HTTP_ADDR:-}" ]; then
         consul kv delete "${CONSUL_KEY}" 2>/dev/null || true
+        consul kv delete "${CONSUL_KEY}/log-level" 2>/dev/null || true
     fi
 }
 trap cleanup EXIT
@@ -62,6 +63,7 @@ trap 'exit 130' INT TERM
 if [ -n "${CONSUL_HTTP_ADDR:-}" ]; then
     echo "[ralph.run] setting consul key '${CONSUL_KEY}' to 'running'"
     consul kv put "${CONSUL_KEY}" "running" > /dev/null
+    consul kv put "${CONSUL_KEY}/log-level" "normal" > /dev/null
 else
     echo "[ralph.run] CONSUL_HTTP_ADDR not set, stop signaling disabled"
 fi

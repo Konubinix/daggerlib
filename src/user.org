@@ -132,7 +132,7 @@ from dagger import function
   dagger call alpine-user with-exec --args="whoami" stdout
   #+end_src
 
-  #+RESULTS[e031d6f2053e990966540648e269c25b50de0215]: use_user_whoami
+  #+RESULTS[3900f7bb59c3d24508b905086b7d34394c71e5ad]: use_user_whoami
   : sam
 
   #+NAME: use_user_workdir
@@ -140,7 +140,7 @@ from dagger import function
   dagger call alpine-user with-exec --args="pwd" stdout
   #+end_src
 
-  #+RESULTS[a3bfb9eacfac16e14fe37a82fb76d4d8227ff47b]: use_user_workdir
+  #+RESULTS[3360a2d40381c02e2f1c125199c1c83d0c6dfd68]: use_user_workdir
   : /home/sam
 
 * Writing environment variables to the user's profile

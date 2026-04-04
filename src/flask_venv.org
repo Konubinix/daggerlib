@@ -41,7 +41,7 @@ from dagger import function
   test -f "$TMP/out/bin/flask" && echo "bin/flask exists"
   #+end_src
 
-  #+RESULTS[15b5556b71422acf9957c6016bfdd6146097cbfd]: flask_venv_export
+  #+RESULTS[39d225c6cf72adf348b9e33d963285ea2091e1f2]: flask_venv_export
   : bin/flask exists
 
 * Test script                                                      :noexport:

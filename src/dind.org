@@ -85,7 +85,7 @@ _DOCKERD_START = (
   dagger call dind-container with-exec --args="docker","--version" stdout
   #+end_src
 
-  #+RESULTS[50548198a6077a91062a16dac41f9ea9721c269b]: dind_docker_installed
+  #+RESULTS[97d5ef29e322ec836a16cdb432ee2a3085c82bef]: dind_docker_installed
   : Docker version 29.3.1, build c2be9cc
 
 * Running commands with dockerd
@@ -130,7 +130,7 @@ _DOCKERD_START = (
   dagger call dind-with-docker --cmd="docker info --format '{{.OSType}}'" stdout
   #+end_src
 
-  #+RESULTS[e4c53e78e51c475a95bc38fffda4875a60d4d4af]: dind_docker_info
+  #+RESULTS[14219eaf8aa3c8807970502d7354524d8eac6bb5]: dind_docker_info
   : linux
 
 * Test script                                                      :noexport:

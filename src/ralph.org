@@ -290,7 +290,7 @@ from dagger import DefaultPath, dag, function
   dagger call debian --extra-packages="python3-yaml" with-file --path=/tmp/ralph.yml --source="${ROOT}/src/ralph.yml" with-exec --args="python3","-c","import yaml; d=yaml.safe_load(open('/tmp/ralph.yml')); print(d['event_loop']['starting_event']); print(len(d['hats']))" stdout
   #+end_src
 
-  #+RESULTS[7b63b3583b96e585f81d3ebff6ff686b97683171]: ralph_yml_valid
+  #+RESULTS[b94a54ae73b870b26f0221f35ffd1963c5d6619f]: ralph_yml_valid
   : work.start
   : 2
 
