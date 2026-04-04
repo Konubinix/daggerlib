@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # [[file:../../src/ralph.org::*run][run:1]]
-ROOT='/home/sam/prog/dagger'
+ROOT='/home/sam/prog/daggerlib'
 set -eu
 
 source "_clk.sh"
@@ -78,16 +78,36 @@ pushd "${CLK__PROJECT}" > /dev/null
         | python3 -u -c '
 import sys, json, re
 W = 120
+level = "normal"
 def out(icon, msg):
     line = f"{icon} {msg}"
     print(line[:W], flush=True)
 for raw in sys.stdin:
     raw = raw.strip()
-    # wrapper messages
+    # wrapper messages (always processed)
     m = re.search(r"\[ralph-wrapper\] (.*)", raw)
     if m:
+        # log-level change command
+        lm = re.match(r"log-level: (\S+)", m.group(1))
+        if lm:
+            level = lm.group(1)
+            out("[ralph]", f"log-level changed to {level}")
+            continue
         out("[ralph]", m.group(1))
         continue
+    # json mode: print every line raw, no filtering, no truncation
+    if level == "json":
+        print(raw, flush=True)
+        continue
+    # verbose mode: print every line, truncated
+    if level == "verbose":
+        print(raw[:W], flush=True)
+        continue
+    # think mode: normal + thinking content
+    if level == "think":
+        if "thinking" in raw.lower() or "antml:thinking" in raw:
+            out("[think]", raw[:W-10])
+            continue
     # event emissions
     if "Event emitted" in raw:
         m2 = re.search(r"Event emitted: ([\w.]+)", raw)

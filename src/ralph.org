@@ -232,6 +232,7 @@ from dagger import DefaultPath, dag, function
       if consul_addr:
           run_cmd += (
               ' echo "[ralph-wrapper] polling consul at {consul_addr} key={consul_key}";'
+              " prev_level=normal;"
               " while kill -0 $RALPH_PID 2>/dev/null; do"
               f'   status=$(curl -sf "{consul_addr}/v1/kv/{consul_key}?raw" 2>/dev/null || echo running);'
               '   if [ "$status" = "stop" ]; then'
@@ -246,6 +247,11 @@ from dagger import DefaultPath, dag, function
               "       kill -KILL $RALPH_PID 2>/dev/null || true;"
               "     fi;"
               "     break;"
+              "   fi;"
+              f'   level=$(curl -sf "{consul_addr}/v1/kv/{consul_key}/log-level?raw" 2>/dev/null || echo normal);'
+              '   if [ "$level" != "$prev_level" ]; then'
+              '     echo "[ralph-wrapper] log-level: $level";'
+              "     prev_level=$level;"
               "   fi;"
               "   sleep 5;"
               " done;"
@@ -348,6 +354,7 @@ cleanup () {
     rm -f "${PID_FILE}"
     if [ -n "${CONSUL_HTTP_ADDR:-}" ]; then
         consul kv delete "${CONSUL_KEY}" 2>/dev/null || true
+        consul kv delete "${CONSUL_KEY}/log-level" 2>/dev/null || true
     fi
 }
 trap cleanup EXIT
@@ -357,6 +364,7 @@ trap 'exit 130' INT TERM
 if [ -n "${CONSUL_HTTP_ADDR:-}" ]; then
     echo "[ralph.run] setting consul key '${CONSUL_KEY}' to 'running'"
     consul kv put "${CONSUL_KEY}" "running" > /dev/null
+    consul kv put "${CONSUL_KEY}/log-level" "normal" > /dev/null
 else
     echo "[ralph.run] CONSUL_HTTP_ADDR not set, stop signaling disabled"
 fi
@@ -373,16 +381,36 @@ pushd "${CLK__PROJECT}" > /dev/null
         | python3 -u -c '
 import sys, json, re
 W = 120
+level = "normal"
 def out(icon, msg):
     line = f"{icon} {msg}"
     print(line[:W], flush=True)
 for raw in sys.stdin:
     raw = raw.strip()
-    # wrapper messages
+    # wrapper messages (always processed)
     m = re.search(r"\[ralph-wrapper\] (.*)", raw)
     if m:
+        # log-level change command
+        lm = re.match(r"log-level: (\S+)", m.group(1))
+        if lm:
+            level = lm.group(1)
+            out("[ralph]", f"log-level changed to {level}")
+            continue
         out("[ralph]", m.group(1))
         continue
+    # json mode: print every line raw, no filtering, no truncation
+    if level == "json":
+        print(raw, flush=True)
+        continue
+    # verbose mode: print every line, truncated
+    if level == "verbose":
+        print(raw[:W], flush=True)
+        continue
+    # think mode: normal + thinking content
+    if level == "think":
+        if "thinking" in raw.lower() or "antml:thinking" in raw:
+            out("[think]", raw[:W-10])
+            continue
     # event emissions
     if "Event emitted" in raw:
         m2 = re.search(r"Event emitted: ([\w.]+)", raw)
@@ -473,6 +501,59 @@ else
 fi
 
 echo "[ralph.stop] done"
+   #+end_src
+
+** log-level
+
+   #+begin_src bash :tangle ../.clk/bin/ralph.log-level :shebang "#!/usr/bin/env bash" :preserve-indentation yes
+set -eu
+
+source "_clk.sh"
+
+clk_usage () {
+    cat<<EOF
+$0
+
+Change the verbosity of a running ralph's output
+
+Levels:
+  normal   filtered, categorized output (default)
+  think    normal + claude thinking content
+  verbose  show every line, truncated
+  json     show every line raw
+--
+O:--consul-key:str:Consul KV key for stop signaling:ralph/dagger/status
+A:level:str:Log level (normal, think, verbose, json). Omit to show current level.
+EOF
+}
+
+clk_help_handler "$@"
+
+CONSUL_KEY="$(clk_value consul-key)"
+
+if [ -z "${CONSUL_HTTP_ADDR:-}" ]; then
+    echo "error: CONSUL_HTTP_ADDR is not set" >&2
+    exit 1
+fi
+
+LEVEL="${CLK___LEVEL:-}"
+
+if [ -z "${LEVEL}" ]; then
+    current="$(consul kv get "${CONSUL_KEY}/log-level" 2>/dev/null || echo "normal")"
+    echo "${current}"
+    exit 0
+fi
+
+case "${LEVEL}" in
+    normal|think|verbose|json) ;;
+    *)
+        echo "error: invalid level '${LEVEL}' (must be normal, think, verbose, json)" >&2
+        exit 1
+        ;;
+esac
+
+consul kv put "${CONSUL_KEY}/log-level" "${LEVEL}" > /dev/null
+echo "[ralph.log-level] set to '${LEVEL}'"
    #+end_src
 
 ** gather

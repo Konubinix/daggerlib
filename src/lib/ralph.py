@@ -107,6 +107,7 @@ async def ralph(
     if consul_addr:
         run_cmd += (
             ' echo "[ralph-wrapper] polling consul at {consul_addr} key={consul_key}";'
+            " prev_level=normal;"
             " while kill -0 $RALPH_PID 2>/dev/null; do"
             f'   status=$(curl -sf "{consul_addr}/v1/kv/{consul_key}?raw" 2>/dev/null || echo running);'
             '   if [ "$status" = "stop" ]; then'
@@ -121,6 +122,11 @@ async def ralph(
             "       kill -KILL $RALPH_PID 2>/dev/null || true;"
             "     fi;"
             "     break;"
+            "   fi;"
+            f'   level=$(curl -sf "{consul_addr}/v1/kv/{consul_key}/log-level?raw" 2>/dev/null || echo normal);'
+            '   if [ "$level" != "$prev_level" ]; then'
+            '     echo "[ralph-wrapper] log-level: $level";'
+            "     prev_level=$level;"
             "   fi;"
             "   sleep 5;"
             " done;"

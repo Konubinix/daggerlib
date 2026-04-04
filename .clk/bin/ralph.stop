@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # [[file:../../src/ralph.org::*stop][stop:1]]
-ROOT='/home/sam/prog/dagger'
+ROOT='/home/sam/prog/daggerlib'
 set -eu
 
 source "_clk.sh"
