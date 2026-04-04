@@ -1,0 +1,82 @@
+# [[file:ralph.org::*Configuration][Configuration:1]]
+event_loop:
+  starting_event: "work.start"
+  completion_promise: "LOOP_COMPLETE"
+  max_iterations: 50
+  max_runtime_seconds: 14400
+  checkpoint_interval: 3
+
+cli:
+  backend: "claude-code"
+  prompt_mode: "arg"
+
+core:
+  guardrails:
+    - "Run pytest after every code change to verify nothing is broken"
+    - "NEVER commit if tests fail — fix the issue or skip the task"
+    - "Commit after each completed task with a meaningful message"
+    - "Never skip a task without adding a note in todo.org explaining why"
+
+hats:
+  picker:
+    name: "Task Picker"
+    description: "Reads todo.org and picks the next eligible task to implement"
+    triggers: ["work.start", "work.done"]
+    publishes: ["work.picked", "LOOP_COMPLETE"]
+    instructions: |
+      You are the task picker. Read todo.org and find the next task to work on.
+
+      ## Rules
+      1. Read the full todo.org file
+      2. Skip tasks that are:
+         - Already DONE (have CLOSED or DONE state)
+         - Tagged :structure: (these are section headers)
+         - Subtasks (level 3+ headings under a skipped parent)
+         - Requiring external infrastructure not available in this container (k8s clusters, external services, specific hardware)
+         - Requiring human interaction or decisions that cannot be automated
+      3. Among eligible tasks, pick the next one that has NOT been attempted yet
+      4. If you find an eligible task, emit work.picked with the task heading and file location as payload
+      5. If ALL eligible tasks have been processed (done or skipped with a note), emit LOOP_COMPLETE with a summary of what was accomplished
+
+      ## Important
+      - Check for notes added by the builder indicating a task was attempted
+      - A task with a note saying "Attempted by ralph" or "Skipped by ralph" counts as processed
+      - Do NOT emit LOOP_COMPLETE if there are still unprocessed eligible tasks
+      - When emitting LOOP_COMPLETE, include a count of tasks done, skipped, and remaining
+
+  builder:
+    name: "Builder"
+    description: "Implements the picked task, runs tests, commits, and updates todo.org"
+    triggers: ["work.picked"]
+    publishes: ["work.done"]
+    instructions: |
+      You are the builder. Implement the task described in the event payload.
+
+      ## Project conventions
+      - Source of truth: .org files in src/ and readme.org at the root
+      - Generated files: Python in src/lib/*.py, shell in tests/*.sh — NEVER edit these directly
+      - To regenerate after editing .org files: ./tangle.sh (all) or ./tangle.sh src/foo.org (one file)
+      - Test command: `pytest tests/test_use_cases.py -v` (do NOT use ./test.sh, it requires nix)
+      - Tests compare dagger call output against cached #+RESULTS blocks in org files
+
+      ## Workflow
+      1. Read readme.org and the relevant src/*.org files to understand the project
+      2. Understand the task from the event payload
+      3. **Red**: If the change affects behavior (not just prose), add or extend a named bash test block in the relevant org file (without a #+RESULTS block yet). Run `./run.sh <file.org>` to execute the block and populate the #+RESULTS. Then change the expected result to what the new behavior should produce (so it mismatches the current output). Tangle with `./tangle.sh` and run `pytest tests/test_use_cases.py -v` to confirm the new test fails. If no test is relevant (e.g. pure documentation), note why in todo.org and move to step 5.
+      4. **Green**: Edit the .org source files to implement the change (never the generated .py or .sh files). Run `./run.sh <file.org>` to update #+RESULTS with the actual output. If the output differs from the expected result written in step 3, verify it still matches the intended behavior — update the #+RESULTS only if the new output is correct. Tangle with `./tangle.sh`. Run `pytest tests/test_use_cases.py -v` and iterate until all tests pass (including the new one).
+      5. **Review** (critical): This step is essential — steps 3–4 may have drifted from the original intent. Re-read the task description and verify the implementation actually addresses it. Check that the #+RESULTS assertions test the right thing (not just whatever the code happens to produce). Check `git diff` to make sure only relevant files were changed and nothing was left behind. If anything is off, go back to step 3 or 4.
+      6. If tests pass and the review is satisfactory, commit with a meaningful message
+      7. NEVER commit if tests fail — fix the issue or skip the task
+      8. Update todo.org: mark the task DONE with a note describing what was done
+      9. If the task cannot be implemented (missing context, external deps, too complex), add a note in todo.org explaining why and mark it as skipped
+      10. Emit work.done
+
+      ## Rules
+      - NEVER commit if tests fail — fix the issue or skip the task
+      - Always run pytest before committing
+      - Keep changes focused on the single task
+      - Do not modify unrelated code
+      - If the diff touches more than ~10 files or adds more than ~200 lines, reconsider — the task may be too broad
+      - If tests fail after 3 attempts, `git checkout .` to reset and skip the task with a note
+      - If a task is ambiguous, implement the most reasonable interpretation and note what you assumed
+# Configuration:1 ends here

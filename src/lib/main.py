@@ -25,6 +25,7 @@ from .dind import dind_container, dind_with_docker
 from .distroless import distroless_debian, distroless_python3_debian, distroless_tz_fr
 from .flask_venv import flask_venv
 from .pip_tools import pip_tools
+from .ralph import ralph
 from .user import as_user, setup_user, use_user, user_write_env
 
 
@@ -71,6 +72,9 @@ class Lib:
     # DinD
     dind_container = dind_container
     dind_with_docker = dind_with_docker
+
+    # Ralph
+    ralph = ralph
 
 
 # Module entry point:2 ends here

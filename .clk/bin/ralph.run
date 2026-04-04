@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+# [[file:../../src/ralph.org::*run][run:1]]
+ROOT='/home/sam/prog/dagger'
+set -eu
+
+source "_clk.sh"
+
+clk_usage () {
+    cat<<EOF
+$0
+
+Run ralph orchestrator in a dagger container
+--
+O:--max-iterations:int:Maximum number of ralph iterations:50
+O:--output-dir:str:Output directory for the artifact:ralph-output
+O:--credentials:file:Path to claude code credentials:${HOME}/.claude/.credentials.json
+O:--consul-key:str:Consul KV key for stop signaling:ralph/dagger/status
+EOF
+}
+
+clk_help_handler "$@"
+
+CONSUL_KEY="$(clk_value consul-key)"
+
+ralph_args="run --max-iterations $(clk_value max-iterations)"
+ralph_args+=" -p 'Follow the instructions in ralph.yml hats'"
+
+dagger_args=(
+    call ralph
+    --claude-credentials "file:$(clk_value credentials)"
+    --extra-packages "emacs-nox curl xz-utils"
+    --ralph-args "${ralph_args}"
+)
+
+if [ -n "${_EXPERIMENTAL_DAGGER_RUNNER_HOST:-}" ]; then
+    dagger_args+=(--dagger-runner-host "${_EXPERIMENTAL_DAGGER_RUNNER_HOST}")
+fi
+if [ -n "${CONSUL_HTTP_ADDR:-}" ]; then
+    dagger_args+=(--consul-addr "${CONSUL_HTTP_ADDR}")
+    dagger_args+=(--consul-key "${CONSUL_KEY}")
+fi
+if [ -f "${CLK__PROJECT}/src/ralph.yml" ]; then
+    dagger_args+=(--ralph-yml "${CLK__PROJECT}/src/ralph.yml")
+fi
+if [ -f "${CLK__PROJECT}/todo.org" ]; then
+    dagger_args+=(--todo-org "${CLK__PROJECT}/todo.org")
+fi
+
+PID_FILE="${CLK__PROJECT}/.ralph-pid"
+OUTPUT_DIR="$(clk_value output-dir)"
+
+cleanup () {
+    rm -f "${PID_FILE}"
+    if [ -n "${CONSUL_HTTP_ADDR:-}" ]; then
+        consul kv delete "${CONSUL_KEY}" 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+
+# Signal ralph as running in Consul
+if [ -n "${CONSUL_HTTP_ADDR:-}" ]; then
+    echo "[ralph.run] setting consul key '${CONSUL_KEY}' to 'running'"
+    consul kv put "${CONSUL_KEY}" "running" > /dev/null
+else
+    echo "[ralph.run] CONSUL_HTTP_ADDR not set, stop signaling disabled"
+fi
+
+LOG_FILE="${CLK__PROJECT}/.ralph-log"
+echo "[ralph.run] starting dagger (output-dir=${OUTPUT_DIR}, log=${LOG_FILE})..."
+echo $$ > "${PID_FILE}"
+
+pushd "${CLK__PROJECT}" > /dev/null
+{
+    dagger --progress=plain "${dagger_args[@]}" \
+        export --path "${OUTPUT_DIR}" 2>&1 \
+        | tee "${LOG_FILE}" \
+        | python3 -u -c '
+import sys, json, re
+W = 120
+def out(icon, msg):
+    line = f"{icon} {msg}"
+    print(line[:W], flush=True)
+for raw in sys.stdin:
+    raw = raw.strip()
+    # wrapper messages
+    m = re.search(r"\[ralph-wrapper\] (.*)", raw)
+    if m:
+        out("\U0001f916", m.group(1))
+        continue
+    # event emissions
+    if "Event emitted" in raw:
+        m2 = re.search(r"Event emitted: ([\w.]+)", raw)
+        out("\U0001f4e8", f"event: {m2.group(1)}" if m2 else "event emitted")
+        continue
+    # git commits (before generic tool match)
+    if "git commit" in raw:
+        m = re.search(r"git commit -m .(.{3,120}?)(?:\\n|\\|\"\"|\x27\x27|$)", raw)
+        if m:
+            out("\U0001f4be", f"commit: {m.group(1).strip().strip(chr(34))}")
+        else:
+            out("\U0001f4be", "commit")
+        continue
+    # tool calls
+    m = re.search(r"\"name\":\"(Bash|Edit|Write|Glob|Grep|Read)\"", raw)
+    if m:
+        tool = m.group(1)
+        mc = re.search(r"\"command\":\"([^\"]{0,200})", raw)
+        mf = re.search(r"\"file_path\":\"([^\"]*)", raw)
+        mp = re.search(r"\"pattern\":\"([^\"]{0,80})", raw)
+        if mc:
+            cmd = mc.group(1).replace("\\n"," ").strip()
+            out("\U0001f4bb", f"{tool}: {cmd}")
+        elif mf:
+            out("\U0000270f\U0000fe0f", f"{tool}: {mf.group(1)}")
+        elif mp:
+            out("\U0001f50d", f"{tool}: {mp.group(1)}")
+        continue
+    # test results
+    m = re.search(r"(\d+ passed[^\"\\\\]*)", raw)
+    if m:
+        out("\u2705" if "failed" not in m.group(1) else "\u274c", m.group(1))
+        continue
+    if re.search(r"FAILED|failed", raw) and "test_use_case" in raw:
+        out("\u274c", "TEST FAILED")
+        continue
+' && \
+        echo "[ralph.run] dagger completed successfully" || \
+        echo "[ralph.run] dagger exited with code $?"
+}
+popd > /dev/null
+# run:1 ends here

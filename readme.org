@@ -38,6 +38,11 @@ org files and are tangled into Python modules and shell test scripts.
   the cgroup setup, tmpfs mounts, and dockerd lifecycle so I don't have
   to think about it.
 
+  For automated development tasks, [[file:src/ralph.org][Ralph]] runs the ralph-orchestrator
+  inside a container with Claude Code, picking tasks from a todo list,
+  implementing them, running tests, and committing — all without
+  human intervention.
+
   All of this is verified by [[file:tests/testing.org][automated tests]] that exercise every target
   via =dagger call=.
 
@@ -123,6 +128,7 @@ org files and are tangled into Python modules and shell test scripts.
   from .distroless import distroless_debian, distroless_python3_debian, distroless_tz_fr
   from .flask_venv import flask_venv
   from .pip_tools import pip_tools
+  from .ralph import ralph
   from .user import as_user, setup_user, use_user, user_write_env
 
 
@@ -169,6 +175,9 @@ org files and are tangled into Python modules and shell test scripts.
       # DinD
       dind_container = dind_container
       dind_with_docker = dind_with_docker
+
+      # Ralph
+      ralph = ralph
   #+end_src
 
 * Editor configuration

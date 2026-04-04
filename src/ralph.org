@@ -1,0 +1,554 @@
+#+TITLE: Ralph orchestrator
+#+LANGUAGE: en
+#+PROPERTY: header-args:python :tangle lib/ralph.py
+#+PROPERTY: header-args:bash   :tangle no :var ROOT=(expand-file-name ".." default-directory) :dir (expand-file-name ".." default-directory) :results verbatim :cache yes :session 8a4f1c2e-3d5b-4a6f-9e7c-1b2d3f4a5c6e
+
+Ralph is an automated task orchestrator that uses Claude Code to
+implement tasks from a todo list. It reads tasks, generates code,
+runs tests, and commits changes — all inside a container.
+
+This module provides a generic =ralph= function that takes any
+pre-configured container and wires up the ralph infrastructure:
+npm packages, git identity, credentials, and patch extraction.
+The caller is responsible for installing their project's own
+dependencies in the container before passing it here.
+
+#+NAME: init
+#+begin_src bash :results none :cache no
+source "./helpers.sh"
+#+end_src
+
+#+begin_src python
+from typing import Annotated
+
+import dagger
+from dagger import DefaultPath, dag, function
+#+end_src
+
+* Configuration
+
+  Ralph is driven by a YAML file that defines the event loop, CLI
+  backend, guardrails, and hats (agents). Each hat triggers on events,
+  performs work, and publishes new events to keep the loop going.
+
+  This is a generic template — projects should adapt the builder
+  instructions (step 3–7) to their own test and build workflow.
+
+  #+begin_src conf :tangle ralph.yml
+  event_loop:
+    starting_event: "work.start"
+    completion_promise: "LOOP_COMPLETE"
+    max_iterations: 50
+    max_runtime_seconds: 14400
+    checkpoint_interval: 3
+
+  cli:
+    backend: "claude-code"
+    prompt_mode: "arg"
+
+  core:
+    guardrails:
+      - "Run pytest after every code change to verify nothing is broken"
+      - "NEVER commit if tests fail — fix the issue or skip the task"
+      - "Commit after each completed task with a meaningful message"
+      - "Never skip a task without adding a note in todo.org explaining why"
+
+  hats:
+    picker:
+      name: "Task Picker"
+      description: "Reads todo.org and picks the next eligible task to implement"
+      triggers: ["work.start", "work.done"]
+      publishes: ["work.picked", "LOOP_COMPLETE"]
+      instructions: |
+        You are the task picker. Read todo.org and find the next task to work on.
+
+        ## Rules
+        1. Read the full todo.org file
+        2. Skip tasks that are:
+           - Already DONE (have CLOSED or DONE state)
+           - Tagged :structure: (these are section headers)
+           - Subtasks (level 3+ headings under a skipped parent)
+           - Requiring external infrastructure not available in this container (k8s clusters, external services, specific hardware)
+           - Requiring human interaction or decisions that cannot be automated
+        3. Among eligible tasks, pick the next one that has NOT been attempted yet
+        4. If you find an eligible task, emit work.picked with the task heading and file location as payload
+        5. If ALL eligible tasks have been processed (done or skipped with a note), emit LOOP_COMPLETE with a summary of what was accomplished
+
+        ## Important
+        - Check for notes added by the builder indicating a task was attempted
+        - A task with a note saying "Attempted by ralph" or "Skipped by ralph" counts as processed
+        - Do NOT emit LOOP_COMPLETE if there are still unprocessed eligible tasks
+        - When emitting LOOP_COMPLETE, include a count of tasks done, skipped, and remaining
+
+    builder:
+      name: "Builder"
+      description: "Implements the picked task, runs tests, commits, and updates todo.org"
+      triggers: ["work.picked"]
+      publishes: ["work.done"]
+      instructions: |
+        You are the builder. Implement the task described in the event payload.
+
+        ## Project conventions
+        - Source of truth: .org files in src/ and readme.org at the root
+        - Generated files: Python in src/lib/*.py, shell in tests/*.sh — NEVER edit these directly
+        - To regenerate after editing .org files: ./tangle.sh (all) or ./tangle.sh src/foo.org (one file)
+        - Test command: `pytest tests/test_use_cases.py -v` (do NOT use ./test.sh, it requires nix)
+        - Tests compare dagger call output against cached #+RESULTS blocks in org files
+
+        ## Workflow
+        1. Read readme.org and the relevant src/*.org files to understand the project
+        2. Understand the task from the event payload
+        3. **Red**: If the change affects behavior (not just prose), add or extend a named bash test block in the relevant org file (without a #+RESULTS block yet). Run `./run.sh <file.org>` to execute the block and populate the #+RESULTS. Then change the expected result to what the new behavior should produce (so it mismatches the current output). Tangle with `./tangle.sh` and run `pytest tests/test_use_cases.py -v` to confirm the new test fails. If no test is relevant (e.g. pure documentation), note why in todo.org and move to step 5.
+        4. **Green**: Edit the .org source files to implement the change (never the generated .py or .sh files). Run `./run.sh <file.org>` to update #+RESULTS with the actual output. If the output differs from the expected result written in step 3, verify it still matches the intended behavior — update the #+RESULTS only if the new output is correct. Tangle with `./tangle.sh`. Run `pytest tests/test_use_cases.py -v` and iterate until all tests pass (including the new one).
+        5. **Review** (critical): This step is essential — steps 3–4 may have drifted from the original intent. Re-read the task description and verify the implementation actually addresses it. Check that the #+RESULTS assertions test the right thing (not just whatever the code happens to produce). Check `git diff` to make sure only relevant files were changed and nothing was left behind. If anything is off, go back to step 3 or 4.
+        6. If tests pass and the review is satisfactory, commit with a meaningful message
+        7. NEVER commit if tests fail — fix the issue or skip the task
+        8. Update todo.org: mark the task DONE with a note describing what was done
+        9. If the task cannot be implemented (missing context, external deps, too complex), add a note in todo.org explaining why and mark it as skipped
+        10. Emit work.done
+
+        ## Rules
+        - NEVER commit if tests fail — fix the issue or skip the task
+        - Always run pytest before committing
+        - Keep changes focused on the single task
+        - Do not modify unrelated code
+        - If the diff touches more than ~10 files or adds more than ~200 lines, reconsider — the task may be too broad
+        - If tests fail after 3 attempts, `git checkout .` to reset and skip the task with a note
+        - If a task is ambiguous, implement the most reasonable interpretation and note what you assumed
+  #+end_src
+
+* Running ralph in a container
+
+  The =ralph= function installs the ralph CLI and Claude Code into the
+  given container, copies the project source into a workdir, runs ralph,
+  and extracts patches for all new commits.
+
+  The caller provides a container with their project's dependencies
+  already installed (test frameworks, build tools, etc.). This function
+  adds the ralph layer on top: npm packages, git config, credentials,
+  and the run/patch workflow.
+
+  Exit code 2 from ralph means "max iterations reached", which is an
+  expected outcome — not an error.
+
+  #+begin_src python
+  @function
+  async def ralph(
+      self,
+      claude_credentials: dagger.Secret,
+      src: Annotated[dagger.Directory, DefaultPath(".")],
+      ctr: dagger.Container | None = None,
+      extra_packages: str = "",
+      ralph_args: str = "",
+      work_dir: str = "/tmp/ralph-workdir",
+      git_email: str = "ralph@localhost",
+      git_name: str = "Ralph",
+      username: str = "sam",
+      dagger_runner_host: str = "",
+      consul_addr: str = "",
+      consul_key: str = "ralph/dagger/status",
+      ralph_yml: dagger.File | None = None,
+      plan_md: dagger.File | None = None,
+      todo_org: dagger.File | None = None,
+  ) -> dagger.Directory:
+      """Run ralph orchestrator in a container and return the workdir with patches."""
+      if ctr is None:
+          ctr = self.debian_python_user_venv(
+              extra_packages=f"git npm {extra_packages}".strip(),
+          )
+      owner = f"{username}:{username}"
+      home = f"/home/{username}"
+      # Install ralph-orchestrator and claude-code via npm
+      ctr = ctr.with_exec(
+          [
+              "sh",
+              "-c",
+              f'npm config set prefix "{home}/.npm-global"'
+              " && npm install -g"
+              " @ralph-orchestrator/ralph-cli"
+              " @anthropic-ai/claude-code",
+          ]
+      ).with_env_variable(
+          "PATH",
+          f"{home}/.npm-global/bin:$PATH",
+          expand=True,
+      )
+      # Install pytest and dagger CLI for running tests inside the container
+      ctr = ctr.with_exec(
+          ["sh", "-c", "pip install --quiet pytest"]
+      ).with_exec(
+          [
+              "sh", "-c",
+              f"cd {home} && curl -fsSL https://dl.dagger.io/dagger/install.sh"
+              " | BIN_DIR=$HOME/.local/bin sh",
+          ]
+      )
+      if dagger_runner_host:
+          ctr = ctr.with_env_variable(
+              "_EXPERIMENTAL_DAGGER_RUNNER_HOST", dagger_runner_host,
+          )
+      # Configure git identity
+      ctr = ctr.with_exec(
+          [
+              "sh",
+              "-c",
+              f'git config --global user.email "{git_email}"'
+              f' && git config --global user.name "{git_name}"'
+              " && git config --global init.defaultBranch main",
+          ]
+      )
+      # Copy project source (including .git) into workdir
+      ctr = (
+          ctr.with_directory(
+              f"{work_dir}/.git",
+              src.directory(".git"),
+              owner=owner,
+          )
+          .with_directory(work_dir, src, owner=owner)
+          .with_exec(["sh", "-c", f"cd {work_dir} && git checkout ."])
+      )
+      # Optional config files
+      if ralph_yml is not None:
+          ctr = ctr.with_file(f"{work_dir}/ralph.yml", ralph_yml, owner=owner)
+      if plan_md is not None:
+          ctr = ctr.with_file(f"{work_dir}/plan.md", plan_md, owner=owner)
+      if todo_org is not None:
+          ctr = ctr.with_file(f"{work_dir}/todo.org", todo_org, owner=owner)
+      # Mount credentials and run ralph
+      ctr = ctr.with_exec(["mkdir", "-p", f"{home}/.claude"]).with_mounted_secret(
+          f"{home}/.claude/.credentials.json",
+          claude_credentials,
+          owner=owner,
+      )
+      # Build the run command: ralph in background + optional Consul polling
+      run_cmd = (
+          f"cd {work_dir}"
+          " && git rev-parse HEAD > /tmp/ralph-base-commit"
+          ' && echo "[ralph-wrapper] starting ralph..."'
+          f' && eval "ralph {ralph_args}" &'
+          " RALPH_PID=$!;"
+          ' echo "[ralph-wrapper] ralph started (PID $RALPH_PID)";'
+      )
+      if consul_addr:
+          run_cmd += (
+              ' echo "[ralph-wrapper] polling consul at {consul_addr} key={consul_key}";'
+              " while kill -0 $RALPH_PID 2>/dev/null; do"
+              f'   status=$(curl -sf "{consul_addr}/v1/kv/{consul_key}?raw" 2>/dev/null || echo running);'
+              '   if [ "$status" = "stop" ]; then'
+              '     echo "[ralph-wrapper] stop signal received, sending SIGTERM to ralph (PID $RALPH_PID)...";'
+              "     kill -TERM $RALPH_PID 2>/dev/null || true;"
+              "     for i in $(seq 1 30); do"
+              "       kill -0 $RALPH_PID 2>/dev/null || break;"
+              "       sleep 1;"
+              "     done;"
+              "     if kill -0 $RALPH_PID 2>/dev/null; then"
+              '       echo "[ralph-wrapper] ralph did not exit after 30s, sending SIGKILL";'
+              "       kill -KILL $RALPH_PID 2>/dev/null || true;"
+              "     fi;"
+              "     break;"
+              "   fi;"
+              "   sleep 5;"
+              " done;"
+          )
+      run_cmd += (
+          ' echo "[ralph-wrapper] waiting for ralph to exit...";'
+          " wait $RALPH_PID;"
+          " RC=$?;"
+          ' echo "[ralph-wrapper] ralph exited with code $RC";'
+          f" echo ${{RC}} > {work_dir}/.ralph-exit-code;"
+          " true"
+      )
+      ctr = ctr.with_exec(["sh", "-c", run_cmd])
+      # Generate format-patch files for all new commits
+      ctr = ctr.with_exec(
+          [
+              "sh",
+              "-c",
+              f"cd {work_dir}"
+              " && mkdir -p patches"
+              " && base=$(cat /tmp/ralph-base-commit)"
+              ' && if [ "$(git rev-parse HEAD)" != "$base" ]; then'
+              ' git format-patch "$base"..HEAD -o patches;'
+              " fi",
+          ]
+      )
+      return ctr.directory(work_dir)
+  #+end_src
+
+  The function cannot be fully exercised without real Claude
+  credentials, but we can verify the tangled =ralph.yml= is valid
+  YAML.
+
+  #+NAME: ralph_yml_valid
+  #+begin_src bash
+  dagger call debian --extra-packages="python3-yaml" with-file --path=/tmp/ralph.yml --source="${ROOT}/src/ralph.yml" with-exec --args="python3","-c","import yaml; d=yaml.safe_load(open('/tmp/ralph.yml')); print(d['event_loop']['starting_event']); print(len(d['hats']))" stdout
+  #+end_src
+
+  #+RESULTS[]: ralph_yml_valid
+  : work.start
+  : 2
+
+* clk aliases
+
+  These scripts let you run =clk ralph run= and =clk ralph gather=
+  instead of typing long =dagger call= commands.
+
+** run
+
+   #+begin_src bash :tangle ../.clk/bin/ralph.run :shebang "#!/usr/bin/env bash" :preserve-indentation yes
+set -eu
+
+source "_clk.sh"
+
+clk_usage () {
+    cat<<EOF
+$0
+
+Run ralph orchestrator in a dagger container
+--
+O:--max-iterations:int:Maximum number of ralph iterations:50
+O:--output-dir:str:Output directory for the artifact:ralph-output
+O:--credentials:file:Path to claude code credentials:${HOME}/.claude/.credentials.json
+O:--consul-key:str:Consul KV key for stop signaling:ralph/dagger/status
+EOF
+}
+
+clk_help_handler "$@"
+
+CONSUL_KEY="$(clk_value consul-key)"
+
+ralph_args="run --max-iterations $(clk_value max-iterations)"
+ralph_args+=" -p 'Follow the instructions in ralph.yml hats'"
+
+dagger_args=(
+    call ralph
+    --claude-credentials "file:$(clk_value credentials)"
+    --extra-packages "emacs-nox curl xz-utils"
+    --ralph-args "${ralph_args}"
+)
+
+if [ -n "${_EXPERIMENTAL_DAGGER_RUNNER_HOST:-}" ]; then
+    dagger_args+=(--dagger-runner-host "${_EXPERIMENTAL_DAGGER_RUNNER_HOST}")
+fi
+if [ -n "${CONSUL_HTTP_ADDR:-}" ]; then
+    dagger_args+=(--consul-addr "${CONSUL_HTTP_ADDR}")
+    dagger_args+=(--consul-key "${CONSUL_KEY}")
+fi
+if [ -f "${CLK__PROJECT}/src/ralph.yml" ]; then
+    dagger_args+=(--ralph-yml "${CLK__PROJECT}/src/ralph.yml")
+fi
+if [ -f "${CLK__PROJECT}/todo.org" ]; then
+    dagger_args+=(--todo-org "${CLK__PROJECT}/todo.org")
+fi
+
+PID_FILE="${CLK__PROJECT}/.ralph-pid"
+OUTPUT_DIR="$(clk_value output-dir)"
+
+cleanup () {
+    rm -f "${PID_FILE}"
+    if [ -n "${CONSUL_HTTP_ADDR:-}" ]; then
+        consul kv delete "${CONSUL_KEY}" 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+
+# Signal ralph as running in Consul
+if [ -n "${CONSUL_HTTP_ADDR:-}" ]; then
+    echo "[ralph.run] setting consul key '${CONSUL_KEY}' to 'running'"
+    consul kv put "${CONSUL_KEY}" "running" > /dev/null
+else
+    echo "[ralph.run] CONSUL_HTTP_ADDR not set, stop signaling disabled"
+fi
+
+LOG_FILE="${CLK__PROJECT}/.ralph-log"
+echo "[ralph.run] starting dagger (output-dir=${OUTPUT_DIR}, log=${LOG_FILE})..."
+echo $$ > "${PID_FILE}"
+
+pushd "${CLK__PROJECT}" > /dev/null
+{
+    dagger --progress=plain "${dagger_args[@]}" \
+        export --path "${OUTPUT_DIR}" 2>&1 \
+        | tee "${LOG_FILE}" \
+        | python3 -u -c '
+import sys, json, re
+W = 120
+def out(icon, msg):
+    line = f"{icon} {msg}"
+    print(line[:W], flush=True)
+for raw in sys.stdin:
+    raw = raw.strip()
+    # wrapper messages
+    m = re.search(r"\[ralph-wrapper\] (.*)", raw)
+    if m:
+        out("\U0001f916", m.group(1))
+        continue
+    # event emissions
+    if "Event emitted" in raw:
+        m2 = re.search(r"Event emitted: ([\w.]+)", raw)
+        out("\U0001f4e8", f"event: {m2.group(1)}" if m2 else "event emitted")
+        continue
+    # git commits (before generic tool match)
+    if "git commit" in raw:
+        m = re.search(r"git commit -m .(.{3,120}?)(?:\\n|\\|\"\"|\x27\x27|$)", raw)
+        if m:
+            out("\U0001f4be", f"commit: {m.group(1).strip().strip(chr(34))}")
+        else:
+            out("\U0001f4be", "commit")
+        continue
+    # tool calls
+    m = re.search(r"\"name\":\"(Bash|Edit|Write|Glob|Grep|Read)\"", raw)
+    if m:
+        tool = m.group(1)
+        mc = re.search(r"\"command\":\"([^\"]{0,200})", raw)
+        mf = re.search(r"\"file_path\":\"([^\"]*)", raw)
+        mp = re.search(r"\"pattern\":\"([^\"]{0,80})", raw)
+        if mc:
+            cmd = mc.group(1).replace("\\n"," ").strip()
+            out("\U0001f4bb", f"{tool}: {cmd}")
+        elif mf:
+            out("\U0000270f\U0000fe0f", f"{tool}: {mf.group(1)}")
+        elif mp:
+            out("\U0001f50d", f"{tool}: {mp.group(1)}")
+        continue
+    # test results
+    m = re.search(r"(\d+ passed[^\"\\\\]*)", raw)
+    if m:
+        out("\u2705" if "failed" not in m.group(1) else "\u274c", m.group(1))
+        continue
+    if re.search(r"FAILED|failed", raw) and "test_use_case" in raw:
+        out("\u274c", "TEST FAILED")
+        continue
+' && \
+        echo "[ralph.run] dagger completed successfully" || \
+        echo "[ralph.run] dagger exited with code $?"
+}
+popd > /dev/null
+   #+end_src
+
+** stop
+
+   #+begin_src bash :tangle ../.clk/bin/ralph.stop :shebang "#!/usr/bin/env bash" :preserve-indentation yes
+set -eu
+
+source "_clk.sh"
+
+clk_usage () {
+    cat<<EOF
+$0
+
+Stop a running ralph via Consul and wait for results to be exported
+--
+O:--consul-key:str:Consul KV key for stop signaling:ralph/dagger/status
+EOF
+}
+
+clk_help_handler "$@"
+
+CONSUL_KEY="$(clk_value consul-key)"
+PID_FILE="${CLK__PROJECT}/.ralph-pid"
+
+if [ -z "${CONSUL_HTTP_ADDR:-}" ]; then
+    echo "error: CONSUL_HTTP_ADDR is not set" >&2
+    exit 1
+fi
+
+status="$(consul kv get "${CONSUL_KEY}" 2>/dev/null || echo "")"
+echo "[ralph.stop] consul key '${CONSUL_KEY}' = '${status:-empty}'"
+if [ "${status}" != "running" ]; then
+    echo "[ralph.stop] no running ralph found"
+    exit 1
+fi
+
+echo "[ralph.stop] writing 'stop' to consul key '${CONSUL_KEY}'..."
+consul kv put "${CONSUL_KEY}" "stop" > /dev/null
+
+if [ -f "${PID_FILE}" ]; then
+    PID="$(cat "${PID_FILE}")"
+    echo "[ralph.stop] waiting for dagger (PID ${PID}) to finish exporting..."
+    tail --pid="${PID}" -f /dev/null 2>/dev/null || true
+    echo "[ralph.stop] dagger process finished"
+else
+    echo "[ralph.stop] no .ralph-pid file, cannot wait for dagger"
+fi
+
+echo "[ralph.stop] done"
+   #+end_src
+
+** gather
+
+   #+begin_src bash :tangle ../.clk/bin/ralph.gather :shebang "#!/usr/bin/env bash" :preserve-indentation yes
+set -eu
+
+source "_clk.sh"
+
+clk_usage () {
+    cat<<EOF
+$0
+
+Apply patches generated by a ralph run to the current branch
+--
+O:--output-dir:str:Output directory for the artifact:ralph-output
+EOF
+}
+
+clk_help_handler "$@"
+
+OUTPUT_DIR="$(clk_value output-dir)"
+PATCH_DIR="${OUTPUT_DIR}/patches"
+
+pushd "${CLK__PROJECT}" > /dev/null
+{
+    if [ ! -d "${PATCH_DIR}" ]; then
+        echo "error: patch directory '${PATCH_DIR}' not found" >&2
+        exit 1
+    fi
+
+    patches=("${PATCH_DIR}"/*.patch)
+    if [ ${#patches[@]} -eq 0 ] || [ ! -e "${patches[0]}" ]; then
+        echo "No patches to apply in '${PATCH_DIR}'"
+        exit 0
+    fi
+
+    # Back up untracked files that patches may create, so git am
+    # does not choke on "already exists in working directory".
+    backed_up=()
+    for p in "${patches[@]}"; do
+        while IFS= read -r f; do
+            if [ -f "$f" ] && ! git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
+                mv "$f" "$f.ralph-backup"
+                backed_up+=("$f")
+            fi
+        done < <(sed -n 's|^+++ b/||p' "$p")
+    done
+
+    echo "Applying ${#patches[@]} patch(es) from '${PATCH_DIR}':"
+    for p in "${patches[@]}"; do
+        echo "  $(basename "$p")"
+    done
+    if ! git am "${patches[@]}"; then
+        for f in "${backed_up[@]}"; do
+            [ -f "$f.ralph-backup" ] && mv "$f.ralph-backup" "$f"
+        done
+        exit 1
+    fi
+
+    # Clean up backups
+    for f in "${backed_up[@]}"; do
+        rm -f "$f.ralph-backup"
+    done
+
+    if [ -f "${OUTPUT_DIR}/todo.org" ]; then
+        cp "${OUTPUT_DIR}/todo.org" todo.org
+        echo "Restored todo.org from ${OUTPUT_DIR}/"
+    fi
+}
+popd > /dev/null
+   #+end_src
+
+* Test script                                                      :noexport:
+
+  #+begin_src bash :tangle ../tests/ralph.sh :noweb yes :cache no
+  <<init>>
+  check-all
+  #+end_src
