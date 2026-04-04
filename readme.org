@@ -180,9 +180,6 @@ org files and are tangled into Python modules and shell test scripts.
   inside org code blocks. Without this, =C-c '= (org-edit-special) would
   re-indent Python code relative to the org heading level.
 
-  The =:prologue= for bash blocks sources =tests/helpers.sh= so that
-  =C-c C-c= on a bash test block works without tangling first.
-
   #+begin_src emacs-lisp :tangle .dir-locals.el
     ((org-mode
       . ((org-babel-default-header-args:python
