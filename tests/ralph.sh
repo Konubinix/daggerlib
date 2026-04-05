@@ -23,7 +23,7 @@ exit 1
 
 
 log_filter_output_code () {
-      clk ralph log-filter < "${ROOT}/tests/ralph_log_sample.txt" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g'
+      ralph-log-filter < "${ROOT}/tests/ralph_log_sample.txt" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g'
 }
 
 log_filter_output_expected () {

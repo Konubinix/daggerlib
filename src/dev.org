@@ -1,0 +1,212 @@
+#+TITLE: Development tooling
+#+LANGUAGE: en
+#+PROPERTY: header-args:python :tangle lib/dev.py
+
+This module provides reproducible development tooling for daggerlib.
+There are three ways to use the tooling, kept in sync:
+
+1. *Mode 1 — bootstrap (host tools):* Uses your local emacs, git,
+   ruff to tangle the minimum files needed for mode 2 to work. This
+   solves the chicken-and-egg problem: dagger functions are tangled
+   Python, so you need a working tangle to get them. Run
+   =./tangle-nodagger.sh= once, then never again.
+
+2. *Mode 2 — local development (dagger):* All commands run inside
+   dagger containers. =./tangle.sh=, =./run.sh=, =./test.sh= are
+   thin wrappers around =dagger call dev ...=. This is what you use
+   for daily work. Reproducible, no nix needed.
+
+3. *Mode 3 — CI (dagger):* Same as mode 2. CI runs
+   =dagger call dev check=.
+
+The bootstrap flow:
+
+1. =./tangle-nodagger.sh= tangles only the files needed for mode 2:
+   =src/lib/dev.py=, =src/lib/main.py=, =src/lib/__init__.py=,
+   =tangle.sh=, =run.sh=, =test.sh=.
+2. =./tangle.sh= (mode 2) calls =dagger call dev tangle=. Tangles
+   all org files inside the container, including rewriting the files
+   from step 1. From this point, everything is reproducible.
+3. Use mode 2 for all daily work.
+
+#+begin_src python
+from typing import Annotated
+
+import dagger
+from dagger import DefaultPath, dag, function, object_type
+
+DAGGER_VERSION = "0.20.3"
+ORG_PIN = "1025e3b49a98f175b124dbccd774918360fe7e11"
+#+end_src
+
+* Dev class
+
+  The =Dev= class provides all development operations as dagger
+  functions. The =container= method builds a Debian container with
+  everything needed: emacs for org-babel, git for the pinned org-mode
+  clone, ruff for Python formatting, pytest for tests, and the dagger
+  CLI for nested calls. Pinned org-mode is cloned during container
+  build so that dagger caches it.
+
+  =tangle= tangles all org files inside the container. The pinned
+  org-mode from the container is symlinked into the work directory so
+  that =tangle-nodagger.sh= skips the clone step.
+  =tangle-nodagger.sh= accepts file arguments, so we pass all org
+  files to get a full tangle (its no-args default only tangles
+  bootstrap files).
+
+  =run= executes all org-babel blocks and saves results. The bash
+  blocks call dagger, so nested access is required.
+
+  =test= runs the full test suite. The test scripts call
+  =dagger call=, so nested dagger access is required.
+
+  =check= is the full CI pipeline: tangle then test.
+
+  #+begin_src python
+  @object_type
+  class Dev:
+
+      @function
+      def container(self) -> dagger.Container:
+          """Dev container with emacs, git, ruff, pytest, and dagger CLI."""
+          ctr = (
+              dag.container()
+              .from_("debian:bookworm-slim")
+              .with_exec(
+                  [
+                      "apt-get", "update",
+                  ]
+              )
+              .with_exec(
+                  [
+                      "apt-get", "install", "-y", "--no-install-recommends",
+                      "emacs-nox", "git", "python3", "python3-pip",
+                      "python3-venv", "curl", "ca-certificates",
+                  ]
+              )
+              .with_exec(
+                  [
+                      "pip", "install", "--break-system-packages",
+                      "ruff", "pytest",
+                  ]
+              )
+              .with_exec(
+                  [
+                      "sh", "-c",
+                      f"curl -fsSL https://dl.dagger.io/dagger/install.sh"
+                      f" | DAGGER_VERSION={DAGGER_VERSION} BIN_DIR=/usr/local/bin sh",
+                  ]
+              )
+          )
+          # Clone and set up pinned org-mode (cached in this layer)
+          ctr = (
+              ctr
+              .with_exec(
+                  [
+                      "git", "clone", "--quiet",
+                      "https://git.savannah.gnu.org/git/emacs/org-mode.git",
+                      "/opt/org",
+                  ]
+              )
+              .with_exec(["git", "-C", "/opt/org", "checkout", "--quiet", ORG_PIN])
+              .with_exec(
+                  [
+                      "emacs", "--batch", "--no-init-file",
+                      "--eval",
+                      '(progn'
+                      '  (push "/opt/org/lisp" load-path)'
+                      '  (require (quote autoload))'
+                      '  (setq generated-autoload-file "/opt/org/lisp/org-loaddefs.el")'
+                      '  (update-directory-autoloads "/opt/org/lisp"))',
+                  ]
+              )
+              .with_exec(
+                  [
+                      "sh", "-c",
+                      "cd /opt/org/lisp && emacs --batch --no-init-file"
+                      ' --eval \'(progn'
+                      "  (push \\\"/opt/org/lisp\\\" load-path)"
+                      "  (load \\\"/opt/org/mk/org-fixup.el\\\")"
+                      "  (org-make-org-version"
+                      '    \\"0\\" \\"0\\"))\' 2>/dev/null || true',
+                  ]
+              )
+          )
+          return ctr
+
+      @function
+      async def tangle(
+          self,
+          source: Annotated[dagger.Directory, DefaultPath(".")],
+      ) -> dagger.Directory:
+          """Tangle all org files, returning the directory with generated code."""
+          return await (
+              self.container()
+              .with_workdir("/work")
+              .with_directory("/work", source)
+              .with_exec(
+                  [
+                      "sh", "-c",
+                      "mkdir -p .tangle-deps && ln -sf /opt/org .tangle-deps/org",
+                  ]
+              )
+              .with_exec(
+                  [
+                      "sh", "-c",
+                      "./tangle-nodagger.sh"
+                      " readme.org TECHNICAL.org src/*.org tests/*.org",
+                  ]
+              )
+              .directory("/work")
+          )
+
+      @function
+      async def run(
+          self,
+          source: Annotated[dagger.Directory, DefaultPath(".")],
+      ) -> dagger.Directory:
+          """Execute org-babel blocks and save results."""
+          return await (
+              self.container()
+              .with_workdir("/work")
+              .with_directory("/work", source)
+              .with_exec(
+                  [
+                      "sh", "-c",
+                      "mkdir -p .tangle-deps && ln -sf /opt/org .tangle-deps/org",
+                  ]
+              )
+              .with_exec(
+                  ["./run.sh"],
+                  experimental_privileged_nesting=True,
+              )
+              .directory("/work")
+          )
+
+      @function
+      async def test(
+          self,
+          source: Annotated[dagger.Directory, DefaultPath(".")],
+      ) -> str:
+          """Run the test suite."""
+          return await (
+              self.container()
+              .with_workdir("/work")
+              .with_directory("/work", source)
+              .with_exec(
+                  ["pytest", "tests/test_use_cases.py", "-v"],
+                  experimental_privileged_nesting=True,
+              )
+              .stdout()
+          )
+
+      @function
+      async def check(
+          self,
+          source: Annotated[dagger.Directory, DefaultPath(".")],
+      ) -> str:
+          """Tangle then test — the full pipeline."""
+          tangled = await self.tangle(source=source)
+          return await self.test(source=tangled)
+  #+end_src

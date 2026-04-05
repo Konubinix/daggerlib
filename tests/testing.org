@@ -31,10 +31,13 @@ in pytest without polluting the global environment.
   :ID:       d49833b6-c2c2-4041-aa38-b7afcb4c0ef9
   :END:
 
-  #+begin_src bash :tangle ../test.sh :shebang "#!/usr/bin/env nix-shell\n#!nix-shell -i bash -p python3Packages.pytest"
+  The test script delegates to dagger. Tests run inside the dev
+  container where pytest and the dagger CLI are available.
+
+  #+begin_src bash :tangle ../test.sh :shebang "#!/usr/bin/env bash"
   set -eu
   cd "$(dirname "$0")"
-  pytest tests/test_use_cases.py "$@"
+  exec dagger call dev test
   #+end_src
 
 * The pytest runner

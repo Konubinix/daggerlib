@@ -1,8 +1,9 @@
 # [[file:../../TECHNICAL.org::*Module entry point][Module entry point:2]]
 """Reusable container helpers: base images, timezone, user setup, DinD, etc."""
 
-from dagger import object_type
+from dagger import function, object_type
 
+from .dev import Dev
 from .alpine import (
     alpine,
     alpine_python,
@@ -77,6 +78,11 @@ class Lib:
 
     # Ralph
     ralph = ralph
+
+    @function
+    def dev(self) -> Dev:
+        """Development tooling: tangle, test, and run inside containers."""
+        return Dev()
 
 
 # Module entry point:2 ends here

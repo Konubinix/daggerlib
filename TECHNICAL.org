@@ -24,8 +24,9 @@ programming setup, tangling pipeline, and editor configuration. See
   #+begin_src python :tangle src/lib/main.py
   """Reusable container helpers: base images, timezone, user setup, DinD, etc."""
 
-  from dagger import object_type
+  from dagger import function, object_type
 
+  from .dev import Dev
   from .alpine import (
       alpine,
       alpine_python,
@@ -100,6 +101,11 @@ programming setup, tangling pipeline, and editor configuration. See
 
       # Ralph
       ralph = ralph
+
+      @function
+      def dev(self) -> Dev:
+          """Development tooling: tangle, test, and run inside containers."""
+          return Dev()
   #+end_src
 
 * Editor configuration
@@ -314,20 +320,23 @@ programming setup, tangling pipeline, and editor configuration. See
   ;;; tangle.el ends here
   #+end_src
 
-* Tangle script
+* Tangle without dagger (bootstrap)
   :PROPERTIES:
   :ID:       0474c6e4-ce96-4f94-8254-1824581b9f8f
   :END:
 
-  This script tangles all org files (this one and the doc files) into
-  their target Python and shell files. It pins an org-mode version for
-  reproducible output and uses =tangle.el= for configuration.
+  This script tangles the minimum files needed for mode 2 (dagger) to
+  work. It uses host tools (emacs, git, ruff) and solves the
+  chicken-and-egg problem: dagger functions are tangled Python, so you
+  need this script to generate them the first time.
 
-  #+begin_src bash :tangle tangle.sh :shebang "#!/usr/bin/env bash"
-  # Tangle org files without requiring personal Emacs configuration.
+  When called with arguments, it tangles the specified files instead.
+
+  #+begin_src bash :tangle tangle-nodagger.sh :shebang "#!/usr/bin/env bash"
+  # Bootstrap tangle using host tools (emacs, git, ruff).
   # Usage:
-  #   ./tangle.sh                          # tangle all org files with :tangle directives
-  #   ./tangle.sh src/foo.org    # tangle a specific file
+  #   ./tangle-nodagger.sh                 # tangle only mode 2 bootstrap files
+  #   ./tangle-nodagger.sh src/foo.org     # tangle a specific file
   set -eu
 
   SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -382,14 +391,29 @@ programming setup, tangling pipeline, and editor configuration. See
   }
 
   if [ $# -eq 0 ]; then
-      for f in "$SCRIPT_DIR"/readme.org "$SCRIPT_DIR"/TECHNICAL.org "$SCRIPT_DIR"/src/*.org "$SCRIPT_DIR"/tests/*.org; do
-          [ -f "$f" ] && grep -q ':tangle' "$f" && tangle_file "$f" || true
+      # Bootstrap only: tangle the files that produce mode 2 infrastructure
+      for f in "$SCRIPT_DIR"/TECHNICAL.org "$SCRIPT_DIR"/src/dev.org "$SCRIPT_DIR"/tests/testing.org; do
+          [ -f "$f" ] && tangle_file "$f"
       done
   else
       for f in "$@"; do
           tangle_file "$(realpath "$f")"
       done
   fi
+  #+end_src
+
+* Tangle script (mode 2)
+  :PROPERTIES:
+  :ID:       a7c3e1f4-5b2d-4d8e-9f6a-2c1b3e4d5f6a
+  :END:
+
+  The daily-use tangle script delegates to dagger. All org files are
+  tangled inside the dev container for reproducibility.
+
+  #+begin_src bash :tangle tangle.sh :shebang "#!/usr/bin/env bash"
+  set -eu
+  cd "$(dirname "$0")"
+  exec dagger call dev tangle export --path=.
   #+end_src
 
 * Run configuration
@@ -421,40 +445,17 @@ programming setup, tangling pipeline, and editor configuration. See
     ;;; run.el ends here
   #+end_src
 
-* Run script
+* Run script (mode 2)
   :PROPERTIES:
   :ID:       b275b2e3-ea23-4ca8-b69a-f7dd4e11d56a
   :END:
 
-  This script executes all org-babel blocks in the doc files and saves
-  the results. It populates the =#+RESULTS:= blocks used by
+  Executes all org-babel blocks inside the dev container and saves
+  the results. Populates the =#+RESULTS:= blocks used by
   =check-result= for test verification.
 
   #+begin_src bash :tangle run.sh :shebang "#!/usr/bin/env bash"
-    # Execute org-babel blocks and save results.
-    # Usage:
-    #   ./run.sh                    # run all doc org files
-    #   ./run.sh src/foo.org        # run a specific file
-    set -eu
-
-    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-
-    run_file() {
-        local orgfile="$1"
-        echo "Running $orgfile..."
-        emacs --batch --no-init-file \
-            -l "$SCRIPT_DIR/tangle.el" \
-            -l "$SCRIPT_DIR/run.el" \
-            --eval "(dagger-run-file \"$orgfile\")" 2>&1 || true
-    }
-
-    if [ $# -eq 0 ]; then
-        for f in "$SCRIPT_DIR"/src/*.org; do
-            [ -f "$f" ] && run_file "$f"
-        done
-    else
-        for f in "$@"; do
-            run_file "$(realpath "$f")"
-        done
-    fi
+  set -eu
+  cd "$(dirname "$0")"
+  exec dagger call dev run export --path=.
   #+end_src
