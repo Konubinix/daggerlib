@@ -148,26 +148,6 @@ from dagger import function
   #+RESULTS[138aee32a82e0ab16afadfff01140a2d9914b9d3]: use_user_workdir
   : /home/sam
 
-* Writing environment variables to the user's profile
-
-  Sometimes I need to persist an environment variable so it's available
-  in login shells (e.g., for SSH sessions or cron jobs).
-
-  #+begin_src python
-  @function
-  def user_write_env(
-      self,
-      ctr: dagger.Container,
-      name: str,
-  ) -> dagger.Container:
-      """Append an export line for a variable to ~/.profile."""
-      q_name = shlex.quote(name)
-      return ctr.with_exec([
-          "bash", "-c",
-          f'echo export {q_name}="${{{q_name}}}"' + " >> ${HOME}/.profile",
-      ])
-  #+end_src
-
 * Test script                                                      :noexport:
   :PROPERTIES:
   :header-args:bash: :tangle no

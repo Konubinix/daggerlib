@@ -111,24 +111,3 @@ def use_user(
 
 
 # The full combo: create + switch:1 ends here
-
-
-# [[file:../user.org::*Writing environment variables to the user's profile][Writing environment variables to the user's profile:1]]
-@function
-def user_write_env(
-    self,
-    ctr: dagger.Container,
-    name: str,
-) -> dagger.Container:
-    """Append an export line for a variable to ~/.profile."""
-    q_name = shlex.quote(name)
-    return ctr.with_exec(
-        [
-            "bash",
-            "-c",
-            f'echo export {q_name}="${{{q_name}}}"' + " >> ${HOME}/.profile",
-        ]
-    )
-
-
-# Writing environment variables to the user's profile:1 ends here

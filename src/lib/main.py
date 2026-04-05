@@ -27,7 +27,7 @@ from .distroless import distroless_debian, distroless_python3_debian, distroless
 from .flask_venv import flask_venv
 from .pip_tools import pip_tools
 from .ralph import ralph
-from .user import as_user, setup_user, use_user, user_write_env
+from .user import as_user, setup_user, use_user
 
 
 @object_type
@@ -64,7 +64,6 @@ class Lib:
     setup_user = setup_user
     as_user = as_user
     use_user = use_user
-    user_write_env = user_write_env
 
     # Pip tools
     pip_tools = pip_tools
