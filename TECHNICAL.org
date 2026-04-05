@@ -445,6 +445,45 @@ programming setup, tangling pipeline, and editor configuration. See
     ;;; run.el ends here
   #+end_src
 
+* Run without dagger
+  :PROPERTIES:
+  :ID:       a7f2c1d8-3e5b-4a9f-b6c2-8d4e1f0a5b3c
+  :END:
+
+  Like =tangle-nodagger.sh= runs tangle using host tools,
+  =run-nodagger.sh= executes org-babel blocks using emacs in batch
+  mode. =Dev.run()= calls this script inside the container — it must
+  not delegate back to =dagger call= or it would recurse infinitely.
+
+  #+begin_src bash :tangle run-nodagger.sh :shebang "#!/usr/bin/env bash"
+  # Execute org-babel blocks and save results.
+  # Usage:
+  #   ./run-nodagger.sh                    # run all src and doc org files
+  #   ./run-nodagger.sh src/foo.org        # run a specific file
+  set -eu
+
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+  run_file() {
+      local orgfile="$1"
+      echo "Running $orgfile..."
+      emacs --batch --no-init-file \
+          -l "$SCRIPT_DIR/tangle.el" \
+          -l "$SCRIPT_DIR/run.el" \
+          --eval "(dagger-run-file \"$orgfile\")" 2>&1 || true
+  }
+
+  if [ $# -eq 0 ]; then
+      for f in "$SCRIPT_DIR"/src/*.org "$SCRIPT_DIR"/doc/*.org; do
+          [ -f "$f" ] && run_file "$f"
+      done
+  else
+      for f in "$@"; do
+          run_file "$(realpath "$f")"
+      done
+  fi
+  #+end_src
+
 * Run script (mode 2)
   :PROPERTIES:
   :ID:       b275b2e3-ea23-4ca8-b69a-f7dd4e11d56a

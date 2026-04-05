@@ -143,7 +143,7 @@ class Dev:
                 ]
             )
             .with_exec(
-                ["./run.sh"],
+                ["./run-nodagger.sh"],
                 experimental_privileged_nesting=True,
             )
             .directory("/work")
@@ -160,7 +160,7 @@ class Dev:
             .with_workdir("/work")
             .with_directory("/work", source)
             .with_exec(
-                ["pytest", "tests/test_use_cases.py", "-v"],
+                ["./test-nodagger.sh"],
                 experimental_privileged_nesting=True,
             )
             .stdout()

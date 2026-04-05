@@ -26,6 +26,22 @@ in pytest without polluting the global environment.
     export PATH="${ROOT}/tests:$PATH"
   #+end_src
 
+* Test without dagger
+  :PROPERTIES:
+  :ID:       f8a3b2c1-d4e5-6789-abcd-0123456789ab
+  :END:
+
+  Like =run-nodagger.sh= and =tangle-nodagger.sh=,
+  =test-nodagger.sh= runs the test suite directly without delegating
+  back to dagger. =Dev.test()= calls this script inside the
+  container.
+
+  #+begin_src bash :tangle ../test-nodagger.sh :shebang "#!/usr/bin/env bash"
+  set -eu
+  cd "$(dirname "$0")"
+  exec pytest tests/test_use_cases.py -v
+  #+end_src
+
 * The test entry point
   :PROPERTIES:
   :ID:       d49833b6-c2c2-4041-aa38-b7afcb4c0ef9
