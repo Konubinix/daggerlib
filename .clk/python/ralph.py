@@ -3,7 +3,6 @@
 # -*- coding: utf-8 -*-
 """Ralph orchestrator CLI commands."""
 
-import json
 import os
 import re
 import shutil
@@ -26,107 +25,6 @@ CONSUL_KEY_DEFAULT = "ralph/dagger/status"
 @group()
 def ralph():
     "Ralph orchestrator commands"
-
-
-@ralph.command()
-def log_filter():
-    "Filter and colorize ralph/dagger output from stdin"
-    RST = "\033[0m"
-    TAG_COLORS = {
-        "[git]": "\033[33m",
-        "[tool]": "\033[36m",
-        "[file]": "\033[35m",
-        "[grep]": "\033[34m",
-        "[PASS]": "\033[32m",
-        "[FAIL]": "\033[31m",
-        "[think]": "\033[90m",
-        "[event]": "\033[37m",
-        "[ralph]": "\033[90m",
-        "[verbose]": "\033[90m",
-    }
-    level = "normal"
-
-    def out(icon, msg):
-        c = TAG_COLORS.get(icon, "")
-        print(f"{c}{icon}{RST} {msg}", flush=True)
-
-    for raw in sys.stdin:
-        raw = raw.strip()
-        m = re.search(r"\[ralph-wrapper\] (.*)", raw)
-        if m:
-            lm = re.match(r"log-level: (\S+)", m.group(1))
-            if lm:
-                level = lm.group(1)
-                out("[ralph]", f"log-level changed to {level}")
-                continue
-            out("[ralph]", m.group(1))
-            continue
-        if level == "json":
-            print(raw, flush=True)
-            continue
-        if level == "think":
-            if "thinking" in raw.lower() or "antml:thinking" in raw:
-                out("[think]", raw)
-                continue
-        if "Event emitted" in raw:
-            m2 = re.search(r"Event emitted: ([\w.]+)", raw)
-            out("[event]", f"event: {m2.group(1)}" if m2 else "event emitted")
-            continue
-        if "git commit" in raw:
-            m = re.search(r"git commit -m .(.{3,120}?)(?:\\n|\\|\"\"|\x27\x27|$)", raw)
-            if m:
-                out("[git]", f"commit: {m.group(1).strip().strip(chr(34))}")
-            else:
-                out("[git]", "commit")
-            continue
-        m = re.search(r"\"name\":\"(Bash|Edit|Write|Glob|Grep|Read)\"", raw)
-        if m:
-            tool = m.group(1)
-            mc = re.search(r"\"command\":\"([^\"]{0,200})", raw)
-            mf = re.search(r"\"file_path\":\"([^\"]*)", raw)
-            mp = re.search(r"\"pattern\":\"([^\"]{0,80})", raw)
-            if mc:
-                cmd = mc.group(1).replace("\\n", " ").strip()
-                out("[tool]", f"{tool}: {cmd}")
-            elif mf:
-                out("[file]", f"{tool}: {mf.group(1)}")
-            elif mp:
-                out("[grep]", f"{tool}: {mp.group(1)}")
-            continue
-        m = re.search(r"(\d+ passed[^\"\\\\]*)", raw)
-        if m:
-            out(
-                "[PASS]" if "failed" not in m.group(1) else "[FAIL]",
-                m.group(1),
-            )
-            continue
-        if re.search(r"FAILED|failed", raw) and "test_use_case" in raw:
-            out("[FAIL]", "TEST FAILED")
-            continue
-        if level == "verbose":
-            try:
-                j = json.loads(raw)
-                t = j.get("type", "?")
-                msg = j.get("message", {})
-                role = msg.get("role", "")
-                content = msg.get("content", "")
-                if isinstance(content, list):
-                    parts = []
-                    for c in content:
-                        if isinstance(c, dict):
-                            parts.append(c.get("type", "?"))
-                        else:
-                            parts.append(str(c)[:80])
-                    content = ", ".join(parts)
-                summary = f"{t}"
-                if role:
-                    summary += f"/{role}"
-                if content:
-                    summary += f": {content}"
-                out("[verbose]", summary)
-            except (json.JSONDecodeError, AttributeError):
-                out("[verbose]", raw)
-            continue
 
 
 @ralph.command()
@@ -225,7 +123,7 @@ def run(max_iterations, output_dir, credentials, consul_key):
             cwd=project,
         )
         filter_proc = subprocess.Popen(
-            ["clk", "ralph", "log-filter"],
+            [sys.executable, str(Path(project) / "tests" / "ralph-log-filter")],
             stdin=subprocess.PIPE,
         )
         with open(log_file, "wb") as lf:
