@@ -27,8 +27,9 @@ def setup_user(
             [
                 "sh",
                 "-c",
-                "if ! which addgroup && which apt ; then"
-                " apt update && apt install --yes adduser ; fi",
+                "command -v adduser > /dev/null"
+                " || { command -v apt > /dev/null"
+                " && apt update && apt install --yes adduser ; }",
             ]
         )
         .with_exec(
