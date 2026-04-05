@@ -31,3 +31,5 @@ Consider a bug fixed ONLY IF you ran a test to check that it failed before and
 passed after your fix.
 
 Never trust yours intuition. Always double check.
+
+Explicitly providing --source=. is an antipattern. Use DefaultPath instead.
