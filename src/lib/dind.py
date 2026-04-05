@@ -29,10 +29,10 @@ def dind_container(
     """Return a container with Docker installed, ready for DinD.
 
     If base is provided, Docker is installed into it (must be Debian/Ubuntu-based).
-    Otherwise uses ubuntu:24.04.
+    Otherwise uses the image from Lib.dind_ubuntu_image.
     """
     if base is None:
-        base = dag.container().from_("ubuntu:24.04")
+        base = dag.container().from_(self.dind_ubuntu_image)
 
     return (
         base.with_exec(["apt-get", "update"])

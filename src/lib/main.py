@@ -38,6 +38,7 @@ class Lib:
     pip_tools_python_version: str = "3.12"
     default_username: str = "sam"
     dev_debian_image: str = "debian:bookworm-slim"
+    dind_ubuntu_image: str = "ubuntu:24.04"
 
     # Alpine
     alpine_tz_fr = alpine_tz_fr
