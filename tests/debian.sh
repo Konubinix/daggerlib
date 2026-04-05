@@ -107,23 +107,23 @@ exit 1
 }
 
 
-debian_europe_paris_export_code () {
-      dagger call debian-europe-paris export --path="$TMP/out/localtime" > /dev/null
+debian_localtime_export_code () {
+      dagger call debian-localtime export --path="$TMP/out/localtime" > /dev/null
       test -s "$TMP/out/localtime" && echo "non-empty"
 }
 
-debian_europe_paris_export_expected () {
+debian_localtime_export_expected () {
       cat<<"EOEXPECTED"
 non-empty
 EOEXPECTED
 }
 
-echo 'Run debian_europe_paris_export'
+echo 'Run debian_localtime_export'
 
-{ debian_europe_paris_export_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
-debian_europe_paris_export_expected > "${TMP}/expected.txt"
+{ debian_localtime_export_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
+debian_localtime_export_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
-echo "Something went wrong when trying debian_europe_paris_export"
+echo "Something went wrong when trying debian_localtime_export"
 cat "${TMP}/stderr.txt" >&2
 exit 1
 }

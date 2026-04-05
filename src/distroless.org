@@ -5,7 +5,7 @@
 
 For production, I want the smallest possible attack surface. Distroless
 images have no shell, no package manager — just my application and its
-runtime. But I still need the correct French timezone.
+runtime. But I still need the correct timezone.
 
 #+NAME: init
 #+begin_src bash :results none :cache no
@@ -20,7 +20,7 @@ from dagger import dag, function
 * Setting the timezone on distroless
 
   Distroless can't run =apt= or =apk=. We copy the timezone file extracted
-  from Debian (via [[file:debian.org::*Extracting the Europe/Paris timezone file][debian_europe_paris]]) directly into the image.
+  from Debian (via [[file:debian.org::*Extracting the localtime file][debian_localtime]]) directly into the image.
 
   [[https://docs.dagger.io/api/reference#definition-Container][.with_file(path, file)]] copies a =File= artifact into the container
   at the given path — like =COPY= in a Dockerfile. This is the only way
@@ -29,9 +29,9 @@ from dagger import dag, function
 
   #+begin_src python
   @function
-  def distroless_tz_fr(self, ctr: dagger.Container) -> dagger.Container:
-      """Copy Europe/Paris localtime into a distroless container."""
-      return ctr.with_file("/etc/localtime", self.debian_europe_paris())
+  def distroless_set_tz(self, ctr: dagger.Container) -> dagger.Container:
+      """Copy localtime into a distroless container (uses Lib.timezone)."""
+      return ctr.with_file("/etc/localtime", self.debian_localtime())
   #+end_src
 
 * Distroless Python 3
@@ -41,11 +41,11 @@ from dagger import dag, function
   #+begin_src python
   @function
   def distroless_python3_debian(self) -> dagger.Container:
-      """Distroless python3 with Europe/Paris timezone."""
+      """Distroless python3 with timezone set."""
       ctr = dag.container().from_(
           f"gcr.io/distroless/python3-debian{self.debian_version}"
       )
-      return self.distroless_tz_fr(ctr)
+      return self.distroless_set_tz(ctr)
   #+end_src
 
   #+NAME: distroless_python3
@@ -63,11 +63,11 @@ from dagger import dag, function
   #+begin_src python
   @function
   def distroless_debian(self) -> dagger.Container:
-      """Distroless static with Europe/Paris timezone."""
+      """Distroless static with timezone set."""
       ctr = dag.container().from_(
           f"gcr.io/distroless/static-debian{self.debian_version}"
       )
-      return self.distroless_tz_fr(ctr)
+      return self.distroless_set_tz(ctr)
   #+end_src
 
   #+NAME: distroless_static_export

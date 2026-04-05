@@ -1,15 +1,16 @@
 :PROPERTIES:
 :ID:       9e3b6103-7bb3-4f2f-bf2e-1ce755f70384
 :END:
-#+TITLE: Lightweight French-timezone containers
+#+TITLE: Lightweight timezone-aware containers
 #+LANGUAGE: en
 #+PROPERTY: header-args:python :tangle lib/alpine.py
 #+PROPERTY: header-args:bash   :tangle no :var ROOT=(expand-file-name ".." default-directory) :dir (expand-file-name ".." default-directory) :results verbatim :cache yes :session 6b362c1c-840e-414f-ac4e-3a71451a6dff
 
-I work on services deployed in France. I need containers where logs
-and cron jobs use Europe/Paris by default, without having to configure
-timezone in every project. Alpine is my go-to base image because it's
-small and fast to pull.
+I need containers where logs and cron jobs use the correct timezone by
+default, without having to configure it in every project. Alpine is my
+go-to base image because it's small and fast to pull. The timezone
+defaults to Europe/Paris but is configurable via the =Lib.timezone=
+field.
 
 #+NAME: init
 #+begin_src bash :results none :cache no
@@ -36,13 +37,14 @@ from dagger import dag, function
 
   #+begin_src python
   @function
-  def alpine_tz_fr(self, ctr: dagger.Container) -> dagger.Container:
-      """Set timezone to Europe/Paris on an Alpine container."""
+  def alpine_set_tz(self, ctr: dagger.Container) -> dagger.Container:
+      """Set timezone on an Alpine container (uses Lib.timezone)."""
+      tz = self.timezone
       return ctr.with_exec([
           "sh", "-c",
           "apk --quiet add --update tzdata"
-          " && cp /usr/share/zoneinfo/Europe/Paris /etc/localtime"
-          ' && echo "Europe/Paris" > /etc/timezone'
+          f" && cp /usr/share/zoneinfo/{tz} /etc/localtime"
+          f' && echo "{tz}" > /etc/timezone'
           " && apk --quiet del tzdata",
       ])
   #+end_src
@@ -73,9 +75,9 @@ from dagger import dag, function
   #+begin_src python
   @function
   def alpine(self, extra_packages: list[str] = ()) -> dagger.Container:
-      """Alpine with Europe/Paris timezone and optional extra packages."""
+      """Alpine with timezone set and optional extra packages."""
       ctr = dag.container().from_(f"alpine:{self.alpine_version}")
-      ctr = self.alpine_tz_fr(ctr)
+      ctr = self.alpine_set_tz(ctr)
       if extra_packages:
           ctr = ctr.with_exec(["apk", "--quiet", "add"] + list(extra_packages))
       return ctr

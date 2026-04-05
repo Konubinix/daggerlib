@@ -5,7 +5,7 @@
 
 Some of my services need libraries or tools that are only well-packaged
 on Debian. I want Debian slim containers with the same defaults as my
-Alpine ones: French timezone, no unnecessary packages pulled in, and
+Alpine ones: correct timezone, no unnecessary packages pulled in, and
 easy user setup.
 
 #+NAME: init
@@ -44,12 +44,12 @@ from dagger import dag, function
 
   #+begin_src python
   @function
-  def debian_tz_fr(self, ctr: dagger.Container) -> dagger.Container:
-      """Set timezone to Europe/Paris on a Debian container."""
+  def debian_set_tz(self, ctr: dagger.Container) -> dagger.Container:
+      """Set timezone on a Debian container (uses Lib.timezone)."""
       return (
           ctr
           .with_exec(["rm", "/etc/localtime"])
-          .with_exec(["ln", "-sf", "/usr/share/zoneinfo/Europe/Paris", "/etc/localtime"])
+          .with_exec(["ln", "-sf", f"/usr/share/zoneinfo/{self.timezone}", "/etc/localtime"])
       )
   #+end_src
 
@@ -75,10 +75,10 @@ from dagger import dag, function
   #+begin_src python
   @function
   def debian(self, extra_packages: list[str] = ()) -> dagger.Container:
-      """Debian slim with Europe/Paris timezone, no auto-install, and optional extra packages."""
+      """Debian slim with timezone set, no auto-install, and optional extra packages."""
       ctr = dag.container().from_(f"debian:{self.debian_tag}")
       ctr = self.debian_no_auto_install(ctr)
-      ctr = self.debian_tz_fr(ctr)
+      ctr = self.debian_set_tz(ctr)
       if extra_packages:
           packages_str = " ".join(shlex.quote(p) for p in extra_packages)
           ctr = ctr.with_exec([
@@ -165,7 +165,7 @@ from dagger import dag, function
   #+RESULTS[ed4afca4883fddab45905885d918cc6252e6a597]: debian_python_user_venv_check
   : Python 3.13.5
 
-* Extracting the Europe/Paris timezone file
+* Extracting the localtime file
 
   Distroless containers can't install packages. I extract the timezone
   file from the existing [[*A base Debian container][debian()]] container so I can copy it into
@@ -177,18 +177,18 @@ from dagger import dag, function
 
   #+begin_src python
   @function
-  def debian_europe_paris(self) -> dagger.File:
-      """Extract the Europe/Paris localtime file from Debian."""
+  def debian_localtime(self) -> dagger.File:
+      """Extract the localtime file from a Debian container."""
       return self.debian().file("/etc/localtime")
   #+end_src
 
-  #+NAME: debian_europe_paris_export
+  #+NAME: debian_localtime_export
   #+begin_src bash
-  dagger call debian-europe-paris export --path="$TMP/out/localtime" > /dev/null
+  dagger call debian-localtime export --path="$TMP/out/localtime" > /dev/null
   test -s "$TMP/out/localtime" && echo "non-empty"
   #+end_src
 
-  #+RESULTS[e2021aa39a9f4fb83b93bc96ea6327cf92a726e2]: debian_europe_paris_export
+  #+RESULTS[ad51dddfce1c768c5f590d0d4b2cbdd289b778a0]: debian_localtime_export
   : non-empty
 
 * Creating a Python venv

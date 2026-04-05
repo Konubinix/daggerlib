@@ -26,10 +26,10 @@ def debian_no_auto_install(self, ctr: dagger.Container) -> dagger.Container:
 
 # [[file:../debian.org::*Setting the timezone on Debian][Setting the timezone on Debian:1]]
 @function
-def debian_tz_fr(self, ctr: dagger.Container) -> dagger.Container:
-    """Set timezone to Europe/Paris on a Debian container."""
+def debian_set_tz(self, ctr: dagger.Container) -> dagger.Container:
+    """Set timezone on a Debian container (uses Lib.timezone)."""
     return ctr.with_exec(["rm", "/etc/localtime"]).with_exec(
-        ["ln", "-sf", "/usr/share/zoneinfo/Europe/Paris", "/etc/localtime"]
+        ["ln", "-sf", f"/usr/share/zoneinfo/{self.timezone}", "/etc/localtime"]
     )
 
 
@@ -55,10 +55,10 @@ def debian_apt_cleanup(self, ctr: dagger.Container) -> dagger.Container:
 # [[file:../debian.org::*A base Debian container][A base Debian container:1]]
 @function
 def debian(self, extra_packages: list[str] = ()) -> dagger.Container:
-    """Debian slim with Europe/Paris timezone, no auto-install, and optional extra packages."""
+    """Debian slim with timezone set, no auto-install, and optional extra packages."""
     ctr = dag.container().from_(f"debian:{self.debian_tag}")
     ctr = self.debian_no_auto_install(ctr)
-    ctr = self.debian_tz_fr(ctr)
+    ctr = self.debian_set_tz(ctr)
     if extra_packages:
         packages_str = " ".join(shlex.quote(p) for p in extra_packages)
         ctr = ctr.with_exec(
@@ -107,14 +107,14 @@ def debian_python_user_venv(
 # Python with a user and virtualenv on Debian:1 ends here
 
 
-# [[file:../debian.org::*Extracting the Europe/Paris timezone file][Extracting the Europe/Paris timezone file:1]]
+# [[file:../debian.org::*Extracting the localtime file][Extracting the localtime file:1]]
 @function
-def debian_europe_paris(self) -> dagger.File:
-    """Extract the Europe/Paris localtime file from Debian."""
+def debian_localtime(self) -> dagger.File:
+    """Extract the localtime file from a Debian container."""
     return self.debian().file("/etc/localtime")
 
 
-# Extracting the Europe/Paris timezone file:1 ends here
+# Extracting the localtime file:1 ends here
 
 
 # [[file:../debian.org::*Creating a Python venv][Creating a Python venv:1]]

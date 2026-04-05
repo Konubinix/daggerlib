@@ -6,15 +6,16 @@ from dagger import dag, function
 
 # [[file:../alpine.org::*Setting the timezone on Alpine][Setting the timezone on Alpine:1]]
 @function
-def alpine_tz_fr(self, ctr: dagger.Container) -> dagger.Container:
-    """Set timezone to Europe/Paris on an Alpine container."""
+def alpine_set_tz(self, ctr: dagger.Container) -> dagger.Container:
+    """Set timezone on an Alpine container (uses Lib.timezone)."""
+    tz = self.timezone
     return ctr.with_exec(
         [
             "sh",
             "-c",
             "apk --quiet add --update tzdata"
-            " && cp /usr/share/zoneinfo/Europe/Paris /etc/localtime"
-            ' && echo "Europe/Paris" > /etc/timezone'
+            f" && cp /usr/share/zoneinfo/{tz} /etc/localtime"
+            f' && echo "{tz}" > /etc/timezone'
             " && apk --quiet del tzdata",
         ]
     )
@@ -26,9 +27,9 @@ def alpine_tz_fr(self, ctr: dagger.Container) -> dagger.Container:
 # [[file:../alpine.org::*A base Alpine container with optional extra packages][A base Alpine container with optional extra packages:1]]
 @function
 def alpine(self, extra_packages: list[str] = ()) -> dagger.Container:
-    """Alpine with Europe/Paris timezone and optional extra packages."""
+    """Alpine with timezone set and optional extra packages."""
     ctr = dag.container().from_(f"alpine:{self.alpine_version}")
-    ctr = self.alpine_tz_fr(ctr)
+    ctr = self.alpine_set_tz(ctr)
     if extra_packages:
         ctr = ctr.with_exec(["apk", "--quiet", "add"] + list(extra_packages))
     return ctr
