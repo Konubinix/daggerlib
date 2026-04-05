@@ -25,10 +25,10 @@ from dagger import dag, function
   :ID:       ea6902a9-4fc7-4560-ad8b-c8cb531e1620
   :END:
 
-  Based on Python 3.8 Alpine (for broad compatibility), with pip-tools
-  installed and a default user. This composes =.from_=, =use_user=, and
-  =.with_exec= — the same primitives described in the [[file:alpine.org][Alpine]] and
-  [[file:user.org][user]] docs.
+  Based on the Python version set in [[file:../TECHNICAL.org::*Module entry point][Lib.pip_tools_python_version]],
+  with pip-tools installed and a default user. This composes =.from_=,
+  =use_user=, and =.with_exec= — the same primitives described in the
+  [[file:alpine.org][Alpine]] and [[file:user.org][user]] docs.
 
   #+begin_src python
   @function

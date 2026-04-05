@@ -35,7 +35,7 @@ class Lib:
     alpine_version: str = "3.23"
     debian_version: str = "13"
     debian_min_version: str = "2"
-    pip_tools_python_version: str = "3.8"
+    pip_tools_python_version: str = "3.12"
     default_username: str = "sam"
 
     # Alpine
