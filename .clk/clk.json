@@ -1,17 +1,27 @@
 {
     "alias": {
-        "test": {
+        "run": {
             "commands": [
                 [
                     "exec",
                     "--in-project",
                     "./run.sh"
-                ],
+                ]
+            ],
+            "documentation": null
+        },
+        "tangle": {
+            "commands": [
                 [
                     "exec",
                     "--in-project",
                     "./tangle.sh"
-                ],
+                ]
+            ],
+            "documentation": null
+        },
+        "test": {
+            "commands": [
                 [
                     "exec",
                     "--in-project",
@@ -20,5 +30,11 @@
             ],
             "documentation": null
         }
+    },
+    "flowdeps": {
+        "test": [
+            "run",
+            "tangle"
+        ]
     }
 }
