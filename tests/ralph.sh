@@ -14,10 +14,11 @@ EOEXPECTED
 
 echo 'Run ralph_yml_valid'
 
-{ ralph_yml_valid_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ ralph_yml_valid_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 ralph_yml_valid_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying ralph_yml_valid"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -40,10 +41,11 @@ EOEXPECTED
 
 echo 'Run log_filter_output'
 
-{ log_filter_output_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ log_filter_output_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 log_filter_output_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying log_filter_output"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 # Test script:1 ends here

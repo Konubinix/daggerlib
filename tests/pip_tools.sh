@@ -13,10 +13,11 @@ EOEXPECTED
 
 echo 'Run pip_tools_available'
 
-{ pip_tools_available_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ pip_tools_available_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 pip_tools_available_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying pip_tools_available"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 # Test script:1 ends here

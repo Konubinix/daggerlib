@@ -13,10 +13,11 @@ EOEXPECTED
 
 echo 'Run debian_timezone'
 
-{ debian_timezone_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ debian_timezone_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 debian_timezone_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying debian_timezone"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -34,10 +35,11 @@ EOEXPECTED
 
 echo 'Run debian_no_recommends'
 
-{ debian_no_recommends_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ debian_no_recommends_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 debian_no_recommends_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying debian_no_recommends"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -54,10 +56,11 @@ EOEXPECTED
 
 echo 'Run debian_extra_packages'
 
-{ debian_extra_packages_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ debian_extra_packages_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 debian_extra_packages_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying debian_extra_packages"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -74,10 +77,11 @@ EOEXPECTED
 
 echo 'Run debian_user_check'
 
-{ debian_user_check_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ debian_user_check_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 debian_user_check_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying debian_user_check"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -94,10 +98,11 @@ EOEXPECTED
 
 echo 'Run debian_python_user_venv_check'
 
-{ debian_python_user_venv_check_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ debian_python_user_venv_check_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 debian_python_user_venv_check_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying debian_python_user_venv_check"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -115,10 +120,11 @@ EOEXPECTED
 
 echo 'Run debian_europe_paris_export'
 
-{ debian_europe_paris_export_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ debian_europe_paris_export_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 debian_europe_paris_export_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying debian_europe_paris_export"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 # Test script:1 ends here

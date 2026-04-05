@@ -13,10 +13,11 @@ EOEXPECTED
 
 echo 'Run alpine_timezone'
 
-{ alpine_timezone_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ alpine_timezone_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 alpine_timezone_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying alpine_timezone"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -33,10 +34,11 @@ EOEXPECTED
 
 echo 'Run alpine_extra_packages'
 
-{ alpine_extra_packages_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ alpine_extra_packages_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 alpine_extra_packages_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying alpine_extra_packages"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -53,10 +55,11 @@ EOEXPECTED
 
 echo 'Run alpine_user_check'
 
-{ alpine_user_check_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ alpine_user_check_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 alpine_user_check_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying alpine_user_check"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -75,10 +78,11 @@ EOEXPECTED
 
 echo 'Run alpine_tz_export'
 
-{ alpine_tz_export_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ alpine_tz_export_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 alpine_tz_export_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying alpine_tz_export"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -95,10 +99,11 @@ EOEXPECTED
 
 echo 'Run alpine_python_check'
 
-{ alpine_python_check_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ alpine_python_check_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 alpine_python_check_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying alpine_python_check"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -115,10 +120,11 @@ EOEXPECTED
 
 echo 'Run alpine_python_user_venv_check'
 
-{ alpine_python_user_venv_check_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ alpine_python_user_venv_check_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 alpine_python_user_venv_check_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying alpine_python_user_venv_check"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 # Test script:1 ends here

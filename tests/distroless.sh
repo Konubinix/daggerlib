@@ -13,10 +13,11 @@ EOEXPECTED
 
 echo 'Run distroless_python3'
 
-{ distroless_python3_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ distroless_python3_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 distroless_python3_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying distroless_python3"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -34,10 +35,11 @@ EOEXPECTED
 
 echo 'Run distroless_static_export'
 
-{ distroless_static_export_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ distroless_static_export_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 distroless_static_export_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying distroless_static_export"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 # Test script:1 ends here

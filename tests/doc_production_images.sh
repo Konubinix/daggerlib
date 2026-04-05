@@ -15,10 +15,11 @@ EOEXPECTED
 
 echo 'Run tz_artifacts'
 
-{ tz_artifacts_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ tz_artifacts_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 tz_artifacts_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying tz_artifacts"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -35,10 +36,11 @@ EOEXPECTED
 
 echo 'Run distroless_python'
 
-{ distroless_python_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ distroless_python_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 distroless_python_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying distroless_python"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -56,10 +58,11 @@ EOEXPECTED
 
 echo 'Run distroless_static'
 
-{ distroless_static_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ distroless_static_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 distroless_static_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying distroless_static"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 # Test script:1 ends here

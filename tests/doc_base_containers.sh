@@ -13,10 +13,11 @@ EOEXPECTED
 
 echo 'Run alpine_timezone'
 
-{ alpine_timezone_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ alpine_timezone_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 alpine_timezone_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying alpine_timezone"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -33,10 +34,11 @@ EOEXPECTED
 
 echo 'Run alpine_extra_packages'
 
-{ alpine_extra_packages_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ alpine_extra_packages_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 alpine_extra_packages_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying alpine_extra_packages"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -53,10 +55,11 @@ EOEXPECTED
 
 echo 'Run debian_timezone'
 
-{ debian_timezone_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ debian_timezone_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 debian_timezone_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying debian_timezone"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -74,10 +77,11 @@ EOEXPECTED
 
 echo 'Run debian_no_recommends'
 
-{ debian_no_recommends_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ debian_no_recommends_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 debian_no_recommends_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying debian_no_recommends"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -94,10 +98,11 @@ EOEXPECTED
 
 echo 'Run distroless_python3'
 
-{ distroless_python3_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ distroless_python3_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 distroless_python3_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying distroless_python3"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -115,10 +120,11 @@ EOEXPECTED
 
 echo 'Run distroless_static_tz'
 
-{ distroless_static_tz_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ distroless_static_tz_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 distroless_static_tz_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying distroless_static_tz"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 # Test script:1 ends here

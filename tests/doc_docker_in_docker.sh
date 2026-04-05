@@ -13,10 +13,11 @@ EOEXPECTED
 
 echo 'Run dind_docker_version'
 
-{ dind_docker_version_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ dind_docker_version_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 dind_docker_version_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying dind_docker_version"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -33,10 +34,11 @@ EOEXPECTED
 
 echo 'Run dind_docker_info'
 
-{ dind_docker_info_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ dind_docker_info_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 dind_docker_info_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying dind_docker_info"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 # Test script:1 ends here

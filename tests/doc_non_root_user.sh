@@ -13,10 +13,11 @@ EOEXPECTED
 
 echo 'Run alpine_user_whoami'
 
-{ alpine_user_whoami_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ alpine_user_whoami_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 alpine_user_whoami_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying alpine_user_whoami"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -33,10 +34,11 @@ EOEXPECTED
 
 echo 'Run alpine_user_home'
 
-{ alpine_user_home_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ alpine_user_home_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 alpine_user_home_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying alpine_user_home"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -53,10 +55,11 @@ EOEXPECTED
 
 echo 'Run alpine_user_id'
 
-{ alpine_user_id_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ alpine_user_id_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 alpine_user_id_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying alpine_user_id"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -73,10 +76,11 @@ EOEXPECTED
 
 echo 'Run debian_user_id'
 
-{ debian_user_id_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ debian_user_id_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 debian_user_id_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying debian_user_id"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 # Test script:1 ends here

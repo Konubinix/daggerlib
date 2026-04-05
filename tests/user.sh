@@ -13,10 +13,11 @@ EOEXPECTED
 
 echo 'Run use_user_whoami'
 
-{ use_user_whoami_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ use_user_whoami_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 use_user_whoami_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying use_user_whoami"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -33,10 +34,11 @@ EOEXPECTED
 
 echo 'Run use_user_workdir'
 
-{ use_user_workdir_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ use_user_workdir_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 use_user_workdir_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying use_user_workdir"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 # Test script:1 ends here

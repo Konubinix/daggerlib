@@ -14,10 +14,11 @@ EOEXPECTED
 
 echo 'Run flask_venv_export'
 
-{ flask_venv_export_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ flask_venv_export_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 flask_venv_export_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying flask_venv_export"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 
@@ -35,10 +36,11 @@ EOEXPECTED
 
 echo 'Run flask_with_gunicorn'
 
-{ flask_with_gunicorn_code || true ; } > "${TMP}/code.txt" 2>/dev/null
+{ flask_with_gunicorn_code || true ; } > "${TMP}/code.txt" 2>"${TMP}/stderr.txt"
 flask_with_gunicorn_expected > "${TMP}/expected.txt"
 diff -uBw "${TMP}/code.txt" "${TMP}/expected.txt" || {
 echo "Something went wrong when trying flask_with_gunicorn"
+cat "${TMP}/stderr.txt" >&2
 exit 1
 }
 # Test script:1 ends here

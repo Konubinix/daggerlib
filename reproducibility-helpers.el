@@ -77,10 +77,11 @@ Handles both `: value` and `#+begin_example...#+end_example` formats."
                 "EOEXPECTED\n"
                 "}\n"
                 "\necho 'Run " name "'\n"
-                "\n{ " name "_code || true ; } > \"${TMP}/code.txt\" 2>/dev/null\n"
+                "\n{ " name "_code || true ; } > \"${TMP}/code.txt\" 2>\"${TMP}/stderr.txt\"\n"
                 name "_expected > \"${TMP}/expected.txt\"\n"
                 "diff -uBw \"${TMP}/code.txt\" \"${TMP}/expected.txt\" || {\n"
                 "echo \"Something went wrong when trying " name "\"\n"
+                "cat \"${TMP}/stderr.txt\" >&2\n"
                 "exit 1\n"
                 "}\n")))
            code nil t))
