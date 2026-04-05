@@ -12,12 +12,13 @@ def setup_user(
     self,
     ctr: dagger.Container,
     uid: int = 1000,
-    username: str = "sam",
+    username: str | None = None,
     sudoer: bool = False,
     shell: str = "/bin/sh",
     groups: list[str] = (),
 ) -> dagger.Container:
     """Create a user with optional groups and sudo access."""
+    username = username or self.default_username
     q_username = shlex.quote(username)
     q_shell = shlex.quote(shell)
     ctr = (
@@ -81,9 +82,10 @@ def as_user(
     self,
     ctr: dagger.Container,
     uid: int = 1000,
-    username: str = "sam",
+    username: str | None = None,
 ) -> dagger.Container:
     """Switch to user and set workdir to their home."""
+    username = username or self.default_username
     return (
         ctr.with_env_variable("HOME", f"/home/{username}")
         .with_user(username)
@@ -102,7 +104,7 @@ def use_user(
     groups: list[str] = (),
     uid: int = 1000,
     sudoer: bool = False,
-    username: str = "sam",
+    username: str | None = None,
 ) -> dagger.Container:
     """Create a user and switch to it (SETUP_USER + AS_USER)."""
     ctr = self.setup_user(ctr, uid=uid, username=username, sudoer=sudoer, groups=groups)

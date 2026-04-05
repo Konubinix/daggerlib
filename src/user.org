@@ -25,6 +25,10 @@ from dagger import function
   and optional passwordless sudo access. This covers both development
   containers (where sudo is handy) and production ones (where it's not).
 
+  The username defaults to =Lib.default_username= so it's defined once
+  and overridable globally — pass =None= (the default) and the
+  library-level setting applies.
+
   [[https://docs.dagger.io/api/reference#definition-Container][.with_env_variable]] sets an environment variable inside the
   container, like =ENV= in a Dockerfile. We use it here to set =HOME=
   and later to prepend =~/.local/bin= to =PATH= (with =expand=True= so
@@ -36,12 +40,13 @@ from dagger import function
       self,
       ctr: dagger.Container,
       uid: int = 1000,
-      username: str = "sam",
+      username: str | None = None,
       sudoer: bool = False,
       shell: str = "/bin/sh",
       groups: list[str] = (),
   ) -> dagger.Container:
       """Create a user with optional groups and sudo access."""
+      username = username or self.default_username
       q_username = shlex.quote(username)
       q_shell = shlex.quote(shell)
       ctr = (
@@ -98,9 +103,10 @@ from dagger import function
       self,
       ctr: dagger.Container,
       uid: int = 1000,
-      username: str = "sam",
+      username: str | None = None,
   ) -> dagger.Container:
       """Switch to user and set workdir to their home."""
+      username = username or self.default_username
       return (
           ctr
           .with_env_variable("HOME", f"/home/{username}")
@@ -122,7 +128,7 @@ from dagger import function
       groups: list[str] = (),
       uid: int = 1000,
       sudoer: bool = False,
-      username: str = "sam",
+      username: str | None = None,
   ) -> dagger.Container:
       """Create a user and switch to it (SETUP_USER + AS_USER)."""
       ctr = self.setup_user(ctr, uid=uid, username=username, sudoer=sudoer, groups=groups)

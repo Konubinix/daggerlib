@@ -22,7 +22,7 @@ async def ralph(
     work_dir: str = "/tmp/ralph-workdir",
     git_email: str = "ralph@localhost",
     git_name: str = "Ralph",
-    username: str = "sam",
+    username: str | None = None,
     dagger_runner_host: str = "",
     consul_addr: str = "",
     consul_key: str = "ralph/dagger/status",
@@ -31,6 +31,7 @@ async def ralph(
     todo_org: dagger.File | None = None,
 ) -> dagger.Directory:
     """Run ralph orchestrator in a container and return the workdir with patches."""
+    username = username or self.default_username
     if ctr is None:
         ctr = self.debian_python_user_venv(
             extra_packages=["git", "npm"] + list(extra_packages),

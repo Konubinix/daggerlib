@@ -19,7 +19,10 @@ programming setup, tangling pipeline, and editor configuration. See
   #+end_src
 
   The =main.py= defines the =@object_type= class that composes all the
-  functions defined in the use-case org files:
+  functions defined in the use-case org files. Besides image versions,
+  the class carries a =default_username= field so the container user
+  is defined once and overridable globally — individual functions
+  default to =None= and fall back to =self.default_username=.
 
   #+begin_src python :tangle src/lib/main.py
   """Reusable container helpers: base images, timezone, user setup, DinD, etc."""
@@ -59,6 +62,7 @@ programming setup, tangling pipeline, and editor configuration. See
       debian_version: str = "13"
       debian_min_version: str = "2"
       pip_tools_python_version: str = "3.8"
+      default_username: str = "sam"
 
       # Alpine
       alpine_tz_fr = alpine_tz_fr
