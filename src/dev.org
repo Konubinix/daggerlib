@@ -43,11 +43,12 @@ ORG_PIN = "1025e3b49a98f175b124dbccd774918360fe7e11"
 * Dev class
 
   The =Dev= class provides all development operations as dagger
-  functions. The =container= method builds a Debian container with
-  everything needed: emacs for org-babel, git for the pinned org-mode
-  clone, ruff for Python formatting, pytest for tests, and the dagger
-  CLI for nested calls. Pinned org-mode is cloned during container
-  build so that dagger caches it.
+  functions. The base image is configured via [[file:../TECHNICAL.org::*Module entry point][Lib.dev_debian_image]]
+  so all versions live in one place. The =container= method builds the
+  image with everything needed: emacs for org-babel, git for the
+  pinned org-mode clone, ruff for Python formatting, pytest for tests,
+  and the dagger CLI for nested calls. Pinned org-mode is cloned
+  during container build so that dagger caches it.
 
   =tangle= tangles all org files inside the container. The pinned
   org-mode from the container is symlinked into the work directory so
@@ -68,13 +69,14 @@ ORG_PIN = "1025e3b49a98f175b124dbccd774918360fe7e11"
   #+begin_src python
   @object_type
   class Dev:
+      debian_image: str = "debian:bookworm-slim"
 
       @function
       def container(self) -> dagger.Container:
           """Dev container with emacs, git, ruff, pytest, and dagger CLI."""
           ctr = (
               dag.container()
-              .from_("debian:bookworm-slim")
+              .from_(self.debian_image)
               .with_exec(
                   [
                       "apt-get", "update",

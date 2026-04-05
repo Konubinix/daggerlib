@@ -37,6 +37,7 @@ class Lib:
     debian_min_version: str = "2"
     pip_tools_python_version: str = "3.12"
     default_username: str = "sam"
+    dev_debian_image: str = "debian:bookworm-slim"
 
     # Alpine
     alpine_tz_fr = alpine_tz_fr
@@ -82,7 +83,7 @@ class Lib:
     @function
     def dev(self) -> Dev:
         """Development tooling: tangle, test, and run inside containers."""
-        return Dev()
+        return Dev(debian_image=self.dev_debian_image)
 
 
 # Module entry point:2 ends here

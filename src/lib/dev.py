@@ -12,12 +12,14 @@ ORG_PIN = "1025e3b49a98f175b124dbccd774918360fe7e11"
 # [[file:../dev.org::*Dev class][Dev class:1]]
 @object_type
 class Dev:
+    debian_image: str = "debian:bookworm-slim"
+
     @function
     def container(self) -> dagger.Container:
         """Dev container with emacs, git, ruff, pytest, and dagger CLI."""
         ctr = (
             dag.container()
-            .from_("debian:bookworm-slim")
+            .from_(self.debian_image)
             .with_exec(
                 [
                     "apt-get",
