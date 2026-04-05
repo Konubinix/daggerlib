@@ -25,18 +25,12 @@ def alpine_tz_fr(self, ctr: dagger.Container) -> dagger.Container:
 
 # [[file:../alpine.org::*A base Alpine container with optional extra packages][A base Alpine container with optional extra packages:1]]
 @function
-def alpine(self, extra_packages: str = "") -> dagger.Container:
+def alpine(self, extra_packages: list[str] = ()) -> dagger.Container:
     """Alpine with Europe/Paris timezone and optional extra packages."""
     ctr = dag.container().from_(f"alpine:{self.alpine_version}")
     ctr = self.alpine_tz_fr(ctr)
     if extra_packages:
-        ctr = ctr.with_exec(
-            [
-                "sh",
-                "-c",
-                f"apk --quiet add {extra_packages}",
-            ]
-        )
+        ctr = ctr.with_exec(["apk", "--quiet", "add"] + list(extra_packages))
     return ctr
 
 
@@ -47,8 +41,8 @@ def alpine(self, extra_packages: str = "") -> dagger.Container:
 @function
 def alpine_user(
     self,
-    extra_packages: str = "",
-    groups: str = "",
+    extra_packages: list[str] = (),
+    groups: list[str] = (),
 ) -> dagger.Container:
     """Alpine with a default user."""
     ctr = self.alpine(extra_packages=extra_packages)
@@ -75,9 +69,9 @@ def alpine_tz(self) -> dagger.Directory:
 
 # [[file:../alpine.org::*Python on Alpine][Python on Alpine:1]]
 @function
-def alpine_python(self, extra_packages: str = "") -> dagger.Container:
+def alpine_python(self, extra_packages: list[str] = ()) -> dagger.Container:
     """Alpine with python3 and pip."""
-    return self.alpine(extra_packages=f"python3 py3-pip {extra_packages}".strip())
+    return self.alpine(extra_packages=["python3", "py3-pip"] + list(extra_packages))
 
 
 # Python on Alpine:1 ends here
@@ -87,9 +81,9 @@ def alpine_python(self, extra_packages: str = "") -> dagger.Container:
 @function
 def alpine_python_user_venv(
     self,
-    extra_packages: str = "",
-    groups: str = "",
-    packages: str = "",
+    extra_packages: list[str] = (),
+    groups: list[str] = (),
+    packages: list[str] = (),
     work_dir: str = "/app",
 ) -> dagger.Container:
     """Alpine with python, user, and a virtualenv."""

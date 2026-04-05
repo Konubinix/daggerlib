@@ -1,4 +1,6 @@
 # [[file:../debian.org::+begin_src python][No heading:2]]
+import shlex
+
 import dagger
 from dagger import dag, function
 # No heading:2 ends here
@@ -52,19 +54,20 @@ def debian_apt_cleanup(self, ctr: dagger.Container) -> dagger.Container:
 
 # [[file:../debian.org::*A base Debian container][A base Debian container:1]]
 @function
-def debian(self, extra_packages: str = "") -> dagger.Container:
+def debian(self, extra_packages: list[str] = ()) -> dagger.Container:
     """Debian slim with Europe/Paris timezone, no auto-install, and optional extra packages."""
     tag = f"{self.debian_version}.{self.debian_min_version}-slim"
     ctr = dag.container().from_(f"debian:{tag}")
     ctr = self.debian_no_auto_install(ctr)
     ctr = self.debian_tz_fr(ctr)
     if extra_packages:
+        packages_str = " ".join(shlex.quote(p) for p in extra_packages)
         ctr = ctr.with_exec(
             [
                 "sh",
                 "-c",
                 "{ apt-get --quiet update"
-                f" && apt-get --quiet install --yes {extra_packages}"
+                f" && apt-get --quiet install --yes {packages_str}"
                 " ; } > /tmp/log 2>&1 || { cat /tmp/log; exit 1; }",
             ]
         )
@@ -77,7 +80,7 @@ def debian(self, extra_packages: str = "") -> dagger.Container:
 
 # [[file:../debian.org::*Debian with a default user][Debian with a default user:1]]
 @function
-def debian_user(self, extra_packages: str = "") -> dagger.Container:
+def debian_user(self, extra_packages: list[str] = ()) -> dagger.Container:
     """Debian with a default user."""
     ctr = self.debian(extra_packages=extra_packages)
     return self.use_user(ctr)
@@ -90,13 +93,13 @@ def debian_user(self, extra_packages: str = "") -> dagger.Container:
 @function
 def debian_python_user_venv(
     self,
-    extra_packages: str = "",
-    groups: str = "",
-    packages: str = "",
+    extra_packages: list[str] = (),
+    groups: list[str] = (),
+    packages: list[str] = (),
     work_dir: str = "/app",
 ) -> dagger.Container:
     """Debian with python, user, and a virtualenv."""
-    ctr = self.debian(extra_packages=f"python3-venv {extra_packages}".strip())
+    ctr = self.debian(extra_packages=["python3-venv"] + list(extra_packages))
     ctr = self.use_user(ctr, groups=groups)
     ctr = ctr.with_workdir(work_dir)
     return self.python_venv(ctr, base=work_dir, packages=packages)
@@ -124,7 +127,7 @@ def python_venv(
     self,
     ctr: dagger.Container,
     base: str,
-    packages: str = "",
+    packages: list[str] = (),
 ) -> dagger.Container:
     """Create a Python venv with --system-site-packages and optionally install packages."""
     ctr = ctr.with_exec(
@@ -138,11 +141,8 @@ def python_venv(
     ).with_env_variable("PATH", f"{base}/venv/bin:$PATH", expand=True)
     if packages:
         ctr = ctr.with_exec(
-            [
-                "sh",
-                "-c",
-                f"{base}/venv/bin/python -m pip --quiet install --upgrade {packages}",
-            ]
+            [f"{base}/venv/bin/python", "-m", "pip", "--quiet", "install", "--upgrade"]
+            + list(packages)
         )
     return ctr
 

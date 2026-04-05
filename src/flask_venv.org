@@ -29,9 +29,9 @@ from dagger import function
 
   #+begin_src python
   @function
-  def flask_venv(self, packages: str = "") -> dagger.Directory:
+  def flask_venv(self, packages: list[str] = ()) -> dagger.Directory:
       """Debian python user venv with flask, exported as directory artifact."""
-      ctr = self.debian_python_user_venv(packages=f"flask {packages}".strip())
+      ctr = self.debian_python_user_venv(packages=["flask"] + list(packages))
       return ctr.directory("/app/venv")
   #+end_src
 

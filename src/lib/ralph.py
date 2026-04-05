@@ -1,4 +1,5 @@
 # [[file:../ralph.org::+begin_src python][No heading:2]]
+import shlex
 from pathlib import Path
 from typing import Annotated
 
@@ -16,7 +17,7 @@ async def ralph(
     claude_credentials: dagger.Secret,
     src: Annotated[dagger.Directory, DefaultPath(".")],
     ctr: dagger.Container | None = None,
-    extra_packages: str = "",
+    extra_packages: list[str] = (),
     ralph_args: str = "",
     work_dir: str = "/tmp/ralph-workdir",
     git_email: str = "ralph@localhost",
@@ -32,16 +33,17 @@ async def ralph(
     """Run ralph orchestrator in a container and return the workdir with patches."""
     if ctr is None:
         ctr = self.debian_python_user_venv(
-            extra_packages=f"git npm {extra_packages}".strip(),
+            extra_packages=["git", "npm"] + list(extra_packages),
         )
     owner = f"{username}:{username}"
     home = f"/home/{username}"
+    q_home = shlex.quote(home)
     # Install ralph-orchestrator and claude-code via npm
     ctr = ctr.with_exec(
         [
             "sh",
             "-c",
-            f'npm config set prefix "{home}/.npm-global"'
+            f"npm config set prefix {q_home}/.npm-global"
             " && npm install -g"
             " @ralph-orchestrator/ralph-cli"
             " @anthropic-ai/claude-code",
@@ -56,7 +58,7 @@ async def ralph(
         [
             "sh",
             "-c",
-            f"cd {home} && curl -fsSL https://dl.dagger.io/dagger/install.sh"
+            f"cd {q_home} && curl -fsSL https://dl.dagger.io/dagger/install.sh"
             " | BIN_DIR=$HOME/.local/bin sh",
         ]
     )
@@ -66,16 +68,19 @@ async def ralph(
             dagger_runner_host,
         )
     # Configure git identity
+    q_email = shlex.quote(git_email)
+    q_name = shlex.quote(git_name)
     ctr = ctr.with_exec(
         [
             "sh",
             "-c",
-            f'git config --global user.email "{git_email}"'
-            f' && git config --global user.name "{git_name}"'
+            f"git config --global user.email {q_email}"
+            f" && git config --global user.name {q_name}"
             " && git config --global init.defaultBranch main",
         ]
     )
     # Copy project source (including .git) into workdir
+    q_work_dir = shlex.quote(work_dir)
     ctr = (
         ctr.with_directory(
             f"{work_dir}/.git",
@@ -83,7 +88,7 @@ async def ralph(
             owner=owner,
         )
         .with_directory(work_dir, src, owner=owner)
-        .with_exec(["sh", "-c", f"cd {work_dir} && git checkout ."])
+        .with_exec(["sh", "-c", f"cd {q_work_dir} && git checkout ."])
     )
     # Optional config files
     if ralph_yml is not None:
@@ -127,7 +132,7 @@ async def ralph(
         [
             "sh",
             "-c",
-            f"cd {work_dir}"
+            f"cd {q_work_dir}"
             " && mkdir -p patches"
             " && base=$(cat /tmp/ralph-base-commit)"
             ' && if [ "$(git rev-parse HEAD)" != "$base" ]; then'

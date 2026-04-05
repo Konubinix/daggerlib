@@ -58,7 +58,11 @@ def run(max_iterations, output_dir, credentials, consul_key):
         "--claude-credentials",
         f"file:{credentials}",
         "--extra-packages",
-        "emacs-nox curl xz-utils",
+        "emacs-nox",
+        "--extra-packages",
+        "curl",
+        "--extra-packages",
+        "xz-utils",
         "--ralph-args",
         ralph_args,
     ]

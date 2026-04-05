@@ -1,4 +1,6 @@
 # [[file:../user.org::+begin_src python][No heading:2]]
+import shlex
+
 import dagger
 from dagger import function
 # No heading:2 ends here
@@ -13,9 +15,11 @@ def setup_user(
     username: str = "sam",
     sudoer: bool = False,
     shell: str = "/bin/sh",
-    groups: str = "",
+    groups: list[str] = (),
 ) -> dagger.Container:
     """Create a user with optional groups and sudo access."""
+    q_username = shlex.quote(username)
+    q_shell = shlex.quote(shell)
     ctr = (
         ctr.with_env_variable("HOME", f"/home/{username}")
         .with_exec(
@@ -30,11 +34,11 @@ def setup_user(
             [
                 "sh",
                 "-c",
-                f"addgroup --gid {uid} --system {username}"
-                f" && adduser --uid {uid} --shell {shell}"
-                f" --disabled-password --gecos '' {username}"
-                f" --ingroup {username}"
-                f" && chown -R {username}:{username} /home/{username}",
+                f"addgroup --gid {uid} --system {q_username}"
+                f" && adduser --uid {uid} --shell {q_shell}"
+                f" --disabled-password --gecos '' {q_username}"
+                f" --ingroup {q_username}"
+                f" && chown -R {q_username}:{q_username} /home/{q_username}",
             ]
         )
     )
@@ -44,19 +48,20 @@ def setup_user(
                 "sh",
                 "-c",
                 f"mkdir -p /etc/sudoers.d"
-                f' && echo "{username} ALL=(ALL) NOPASSWD: ALL"'
+                f' && echo "{q_username} ALL=(ALL) NOPASSWD: ALL"'
                 f" >> /etc/sudoers.d/username",
             ]
         )
     if groups:
+        groups_str = " ".join(shlex.quote(g) for g in groups)
         ctr = ctr.with_exec(
             [
                 "sh",
                 "-c",
-                f"for group in {groups} ; do"
+                f"for group in {groups_str} ; do"
                 f' {{ grep -q -E "^${{group}}:" /etc/group'
                 f" || addgroup --system $group ; }}"
-                f" && adduser {username} $group ; done",
+                f" && adduser {q_username} $group ; done",
             ]
         )
     ctr = ctr.with_env_variable(
@@ -94,7 +99,7 @@ def as_user(
 def use_user(
     self,
     ctr: dagger.Container,
-    groups: str = "",
+    groups: list[str] = (),
     uid: int = 1000,
     sudoer: bool = False,
     username: str = "sam",
@@ -116,11 +121,12 @@ def user_write_env(
     name: str,
 ) -> dagger.Container:
     """Append an export line for a variable to ~/.profile."""
+    q_name = shlex.quote(name)
     return ctr.with_exec(
         [
             "bash",
             "-c",
-            f'echo export {name}="${{{name}}}"' + " >> ${HOME}/.profile",
+            f'echo export {q_name}="${{{q_name}}}"' + " >> ${HOME}/.profile",
         ]
     )
 
