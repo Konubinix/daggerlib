@@ -19,6 +19,7 @@ in pytest without polluting the global environment.
   command output against cached =#+RESULTS= blocks.
 
   #+begin_src bash :tangle helpers.sh :shebang "#!/usr/bin/env bash"
+    unset HISTFILE
     TMP=$(mktemp -d)
     trap 'rm -rf "$TMP"' EXIT
     export ROOT=$(while [ ! -f dagger.json ]; do cd ..; done && pwd)
