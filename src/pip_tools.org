@@ -25,6 +25,11 @@ from dagger import dag, function
   =use_user=, and =.with_exec= — the same primitives described in the
   [[file:alpine.org][Alpine]] and [[file:user.org][user]] docs.
 
+  This intentionally uses =python:{version}-alpine= directly instead
+  of =alpine_python()=, because =pip-compile= output depends on the
+  exact Python version and =alpine_python()= gives whatever Python
+  ships with the Alpine release.
+
   #+begin_src python
   @function
   def pip_tools(self) -> dagger.Container:
