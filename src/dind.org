@@ -4,16 +4,11 @@
 #+TITLE: Docker inside containers
 #+LANGUAGE: en
 #+PROPERTY: header-args:python :tangle lib/dind.py
-#+PROPERTY: header-args:bash   :tangle no :var ROOT=(expand-file-name ".." default-directory) :dir (expand-file-name ".." default-directory) :results verbatim :cache yes :session 22cbb8e5-328a-4eef-bb0d-ca8ad0a724bb
+#+PROPERTY: header-args:bash   :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
 
 Some CI pipelines and integration tests need to build or run Docker
 images. I need a way to run Docker inside a Dagger container (DinD),
 handling cgroup setup, tmpfs mounts, and dockerd lifecycle.
-
-#+NAME: init
-#+begin_src bash :results none :cache no
-source "./helpers.sh"
-#+end_src
 
 #+begin_src python
 import dagger
@@ -81,12 +76,22 @@ _DOCKERD_START = (
   #+end_src
 
   #+NAME: dind_docker_installed
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: dind-container
+chain:
+  - with-exec: [docker, --version]
+  - stdout
+  #+end_src
+
+  #+RESULTS[3595ab3467f2a1dcbacdb430fb3b489f4cb77b9f]: dind_docker_installed
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call dind-container with-exec --args="docker","--version" stdout
   #+end_src
 
-  #+RESULTS[ed31864a4019a0a13cc18b48cbeb6f920cc51298]: dind_docker_installed
+  #+RESULTS[76415b1bf2ae8d16d984b535bea5f493b16693d4]:
   : Docker version 29.3.1, build c2be9cc
+  :end:
 
 * Running commands with dockerd
   :PROPERTIES:
@@ -126,20 +131,20 @@ _DOCKERD_START = (
   #+end_src
 
   #+NAME: dind_docker_info
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: dind-with-docker
+args:
+  cmd: "docker info --format '{{.OSType}}'"
+chain:
+  - stdout
+  #+end_src
+
+  #+RESULTS[de157bd0460e994b6da61535e090ab514dc50b45]: dind_docker_info
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call dind-with-docker --cmd="docker info --format '{{.OSType}}'" stdout
   #+end_src
 
-  #+RESULTS[971925a09e75d647838cbc215b25379e05582559]: dind_docker_info
+  #+RESULTS[33b96daf6164c139b2af898b2e8cf5564600e744]:
   : linux
-
-* Test script                                                      :noexport:
-  :PROPERTIES:
-  :header-args:bash: :tangle no
-  :ID:       3bbae99e-fce1-4b81-9a8e-18045dda5c47
-  :END:
-
-  #+begin_src bash :tangle ../tests/dind.sh :noweb yes :cache no
-  <<init>>
-  check-all
-  #+end_src
+  :end:

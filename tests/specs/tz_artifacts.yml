@@ -1,0 +1,4 @@
+func: alpine-tz
+chain:
+  - export: $TMP/out
+post: ls "$TMP/out" | sort

@@ -3,17 +3,12 @@
 :END:
 #+TITLE: Packaging a log collector CLI
 #+LANGUAGE: en
-#+PROPERTY: header-args:bash :tangle no :var ROOT=(expand-file-name ".." default-directory) :dir (expand-file-name ".." default-directory) :results verbatim :cache yes :session 38a339f8-c669-4503-8b34-66ab9188b499
+#+PROPERTY: header-args:bash :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
 
 I want to write a small CLI that collects logs from various sources
 and ships them to a central server. It will run as a daemon on our
 French infrastructure, so timestamps must use Europe/Paris. I need to
 pick the right base image to package it in.
-
-#+NAME: init
-#+begin_src bash :results none :cache no
-source "./helpers.sh"
-#+end_src
 
 * Starting with Alpine for the lightweight daemon
 
@@ -22,12 +17,22 @@ source "./helpers.sh"
   set to Europe/Paris. I can verify the timestamps will be correct:
 
   #+NAME: alpine_timezone
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: alpine
+chain:
+  - with-exec: [cat, /etc/timezone]
+  - stdout
+  #+end_src
+
+  #+RESULTS[1713d76d13c912707056a7da0e52576cd98eca78]: alpine_timezone
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call alpine with-exec --args="cat","/etc/timezone" stdout
   #+end_src
 
-  #+RESULTS[78270fbdde9402f2fa1e45186660200752ec9822]: alpine_timezone
+  #+RESULTS[edceca51788f31fff4bb68c4a0d2b6971d923738]:
   : Europe/Paris
+  :end:
 
 * The collector needs curl to fetch remote configs
 
@@ -35,12 +40,24 @@ source "./helpers.sh"
   startup. I need =curl= in the image:
 
   #+NAME: alpine_extra_packages
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: alpine
+args:
+  extra-packages: [curl]
+chain:
+  - with-exec: [which, curl]
+  - stdout
+  #+end_src
+
+  #+RESULTS[4cd8426869dd414aedd75362cd94eb25dfa1466c]: alpine_extra_packages
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call alpine --extra-packages=curl with-exec --args="which","curl" stdout
   #+end_src
 
-  #+RESULTS[2f576cdcb1b2189be34dc548c79797bcd6c4acac]: alpine_extra_packages
+  #+RESULTS[1e58f619f899b7a0230caf874bc01d3c559d7f55]:
   : /usr/bin/curl
+  :end:
 
 * Switching to Debian for the version with native extensions
 
@@ -49,24 +66,44 @@ source "./helpers.sh"
   variant needs a Debian base. Same timezone guarantee:
 
   #+NAME: debian_timezone
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: debian
+chain:
+  - with-exec: [sh, -c, "readlink -f /etc/localtime"]
+  - stdout
+  #+end_src
+
+  #+RESULTS[6d7961e8901e316fc3b62883aa44306cabf37832]: debian_timezone
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call debian with-exec --args="sh","-c","readlink -f /etc/localtime" stdout
   #+end_src
 
-  #+RESULTS[42fa980215ebfc552cc6dead2c7b243a398517ec]: debian_timezone
+  #+RESULTS[2888a8ee6cf352d07f5efc22cf9b9154b2d3485a]:
   : /usr/share/zoneinfo/Europe/Paris
+  :end:
 
   The image stays lean because apt recommends are disabled — no
   surprise packages pulled in behind my back:
 
   #+NAME: debian_no_recommends
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: debian
+chain:
+  - with-exec: [cat, /etc/apt/apt.conf.d/01norecommend]
+  - stdout
+  #+end_src
+
+  #+RESULTS[b7cd828fbfcda0bd8df973c8305bdc1065da95bf]: debian_no_recommends
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call debian with-exec --args="cat","/etc/apt/apt.conf.d/01norecommend" stdout
   #+end_src
 
-  #+RESULTS[44eb6505a40e0d8ee0162ff541a74f851ad46ab9]: debian_no_recommends
+  #+RESULTS[7671b80fff5b33dcc8a2217e5ec239b326dc5eb9]:
   : APT::Install-Recommends "0";
   : APT::Install-Suggests "0";
+  :end:
 
 * The production image: distroless for minimal attack surface
 
@@ -78,30 +115,41 @@ source "./helpers.sh"
   For the Python variant of my collector:
 
   #+NAME: distroless_python3
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: distroless-python-3-debian
+chain:
+  - with-exec: [python3, -c, "import os; print(os.path.exists('/etc/localtime'))"]
+  - stdout
+  #+end_src
+
+  #+RESULTS[d317980623c1af8f8f1909a950df23c6a824f852]: distroless_python3
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call distroless-python-3-debian with-exec --args="python3","-c","import os; print(os.path.exists('/etc/localtime'))" stdout
   #+end_src
 
-  #+RESULTS[4c01458b02761cf28f41c4c354b36e7327da6548]: distroless_python3
+  #+RESULTS[8afe27936e99ecdd030f0f2c8de1d708c620d066]:
   : True
+  :end:
 
   For the compiled Go version:
 
   #+NAME: distroless_static_tz
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: distroless-debian
+chain:
+  - file: /etc/localtime
+  - export: $TMP/out/localtime
+post: test -s "$TMP/out/localtime" && echo "non-empty"
+  #+end_src
+
+  #+RESULTS[898fbf680e944af3a163e95027be949d214ddc57]: distroless_static_tz
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call distroless-debian file --path="/etc/localtime" export --path="$TMP/out/localtime" > /dev/null
   test -s "$TMP/out/localtime" && echo "non-empty"
   #+end_src
 
-  #+RESULTS[425ea00ba3ac80f43be4b6559814867744f9dee2]: distroless_static_tz
+  #+RESULTS[af4f8b1adead4ee814e7c07945c2b765abb9713b]:
   : non-empty
-
-* Test script                                                      :noexport:
-  :PROPERTIES:
-  :header-args:bash: :tangle no
-  :END:
-
-  #+begin_src bash :tangle ../tests/doc_base_containers.sh :noweb yes :cache no
-  <<init>>
-  check-all
-  #+end_src
+  :end:

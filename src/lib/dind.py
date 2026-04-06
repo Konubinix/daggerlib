@@ -1,4 +1,4 @@
-# [[file:../dind.org::+begin_src python][No heading:2]]
+# [[file:../dind.org::+begin_src python][No heading:1]]
 import dagger
 from dagger import dag, function
 
@@ -17,7 +17,7 @@ _DOCKERD_START = (
     "dockerd &>/var/log/dockerd.log &\n"
     "sleep 3\n"
 )
-# No heading:2 ends here
+# No heading:1 ends here
 
 
 # [[file:../dind.org::*Preparing a DinD-capable container][Preparing a DinD-capable container:1]]

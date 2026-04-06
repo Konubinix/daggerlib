@@ -1,0 +1,5 @@
+func: distroless-debian
+chain:
+  - file: /etc/localtime
+  - export: $TMP/out/localtime
+post: test -s "$TMP/out/localtime" && echo "non-empty"

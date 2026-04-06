@@ -1,16 +1,11 @@
 #+TITLE: Non-root user workflows
 #+LANGUAGE: en
 #+PROPERTY: header-args:python :tangle lib/user.py
-#+PROPERTY: header-args:bash   :tangle no :var ROOT=(expand-file-name ".." default-directory) :dir (expand-file-name ".." default-directory) :results verbatim :cache yes :session 8042a222-4aac-4682-9042-7dee49fd9b21
+#+PROPERTY: header-args:bash   :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
 
 Running containers as root is a security risk. I need reusable helpers
 to create users, switch to them, and set up their environment — without
 repeating the same =adduser= boilerplate in every project.
-
-#+NAME: init
-#+begin_src bash :results none :cache no
-source "./helpers.sh"
-#+end_src
 
 #+begin_src python
 import shlex
@@ -140,27 +135,37 @@ from dagger import function
   We test user creation via the [[file:alpine.org::*A non-root user for safer workflows][alpine-user]] target (which calls [[*The full combo: create + switch][use_user]]):
 
   #+NAME: use_user_whoami
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: alpine-user
+chain:
+  - with-exec: [whoami]
+  - stdout
+  #+end_src
+
+  #+RESULTS[84729e04121e22cfb1858e425b78310ab46feb48]: use_user_whoami
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call alpine-user with-exec --args="whoami" stdout
   #+end_src
 
-  #+RESULTS[9069aba63afd7b58b1313209ee3ccb09c8404fd9]: use_user_whoami
+  #+RESULTS[598314540270cb528c156af82b8c46b52e84879f]:
   : sam
+  :end:
 
   #+NAME: use_user_workdir
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: alpine-user
+chain:
+  - with-exec: [pwd]
+  - stdout
+  #+end_src
+
+  #+RESULTS[42b210ef97245f0d08c57b8c79d3fccbfc73bbb7]: use_user_workdir
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call alpine-user with-exec --args="pwd" stdout
   #+end_src
 
-  #+RESULTS[138aee32a82e0ab16afadfff01140a2d9914b9d3]: use_user_workdir
+  #+RESULTS[eb99389b500365541b1090dbc071bf550d4dbba6]:
   : /home/sam
-
-* Test script                                                      :noexport:
-  :PROPERTIES:
-  :header-args:bash: :tangle no
-  :END:
-
-  #+begin_src bash :tangle ../tests/user.sh :noweb yes :cache no
-  <<init>>
-  check-all
-  #+end_src
+  :end:

@@ -1,0 +1,4 @@
+func: alpine-python-user-venv
+chain:
+  - with-exec: [sh, -c, "test -d /app/venv && /app/venv/bin/python --version"]
+  - stdout

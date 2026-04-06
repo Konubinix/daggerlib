@@ -1,0 +1,4 @@
+func: alpine-user
+chain:
+  - with-exec: ["id", sam]
+  - stdout

@@ -3,17 +3,12 @@
 :END:
 #+TITLE: Building a data pipeline CLI
 #+LANGUAGE: en
-#+PROPERTY: header-args:bash :tangle no :var ROOT=(expand-file-name ".." default-directory) :dir (expand-file-name ".." default-directory) :results verbatim :cache yes :session 9a21e068-5ba0-4e7d-9684-d27774472bd7
+#+PROPERTY: header-args:bash :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
 
 I want to write a CLI that fetches CSV files from an SFTP server,
 transforms them, and loads them into a database. It's Python, and I
 need a reproducible environment where every developer on my team gets
 the same Python version and the same pinned dependencies.
-
-#+NAME: init
-#+begin_src bash :results none :cache no
-source "./helpers.sh"
-#+end_src
 
 * Checking the Python version in the build environment
 
@@ -21,12 +16,22 @@ source "./helpers.sh"
   verify what Alpine gives me:
 
   #+NAME: python_version
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: alpine-python
+chain:
+  - with-exec: [python3, -c, "import sys; v=sys.version_info; print('3.10+' if v.major*100+v.minor >= 310 else 'too old')"]
+  - stdout
+  #+end_src
+
+  #+RESULTS[7f27ff600bf18510ed9376e6622ece58dee5764f]: python_version
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call alpine-python with-exec --args="python3","-c","import sys; v=sys.version_info; print('3.10+' if v.major*100+v.minor >= 310 else 'too old')" stdout
   #+end_src
 
-  #+RESULTS[96835ff31127f34648350bbee8d4ed8c45bc06e6]: python_version
+  #+RESULTS[c52b7f53e6a3b31c1301aa64b5155c39ba539e67]:
   : 3.10+
+  :end:
 
 * Setting up the development container
 
@@ -36,12 +41,22 @@ source "./helpers.sh"
   that the virtualenv exists and that the version is sufficient:
 
   #+NAME: alpine_venv
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: alpine-python-user-venv
+chain:
+  - with-exec: [/app/venv/bin/python, -c, "import sys; v=sys.version_info; print('3.10+' if v.major*100+v.minor >= 310 else 'too old')"]
+  - stdout
+  #+end_src
+
+  #+RESULTS[e599bf4e09366931e15d6c7031573db2399ed1e7]: alpine_venv
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call alpine-python-user-venv with-exec --args="/app/venv/bin/python","-c","import sys; v=sys.version_info; print('3.10+' if v.major*100+v.minor >= 310 else 'too old')" stdout
   #+end_src
 
-  #+RESULTS[0fc6a064d7ad25ac013a865c35317535cbbd7bfb]: alpine_venv
+  #+RESULTS[31983b8e1e01ef44c0992d246314e5c65dfaf091]:
   : 3.10+
+  :end:
 
 * Installing the pipeline's dependencies
 
@@ -49,12 +64,24 @@ source "./helpers.sh"
   can bake dependencies into the container image:
 
   #+NAME: venv_with_packages
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: alpine-python-user-venv
+args:
+  packages: [requests]
+chain:
+  - with-exec: [python3, -c, "import requests; print(requests.__name__)"]
+  - stdout
+  #+end_src
+
+  #+RESULTS[2279418495073d49b151dc0fccb23491e51c0e99]: venv_with_packages
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call alpine-python-user-venv --packages=requests with-exec --args="python3","-c","import requests; print(requests.__name__)" stdout
   #+end_src
 
-  #+RESULTS[6dbdac34e507bafaec9a585d0156c21c36e36b65]: venv_with_packages
+  #+RESULTS[933c89d76ea5c0943a8114d1eb9942e75f3af66e]:
   : requests
+  :end:
 
 * When the pipeline needs native database drivers
 
@@ -62,12 +89,22 @@ source "./helpers.sh"
   =libpq-dev= and a C compiler, which are easier on Debian:
 
   #+NAME: debian_venv
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: debian-python-user-venv
+chain:
+  - with-exec: [/app/venv/bin/python, -c, "import sys; v=sys.version_info; print('3.10+' if v.major*100+v.minor >= 310 else 'too old')"]
+  - stdout
+  #+end_src
+
+  #+RESULTS[07d3aecd8aabc6a076a33432a4dff729ace47c4e]: debian_venv
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call debian-python-user-venv with-exec --args="/app/venv/bin/python","-c","import sys; v=sys.version_info; print('3.10+' if v.major*100+v.minor >= 310 else 'too old')" stdout
   #+end_src
 
-  #+RESULTS[b4be63d7015a7a6a60b6983b7ec224a3ea05eb16]: debian_venv
+  #+RESULTS[491a255b16adfa994bfea7f16090aba240a977bb]:
   : 3.10+
+  :end:
 
 * Pinning dependencies with pip-tools
 
@@ -75,19 +112,19 @@ source "./helpers.sh"
   =pip-compile= to lock all transitive dependencies:
 
   #+NAME: pip_tools
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: pip-tools
+chain:
+  - with-exec: [which, pip-compile]
+  - stdout
+  #+end_src
+
+  #+RESULTS[3d4f99572dedc99c5ea9309649872d1976a05339]: pip_tools
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call pip-tools with-exec --args="which","pip-compile" stdout
   #+end_src
 
-  #+RESULTS[452000261bb7f78e190b2e903ea9c34b5376efd3]: pip_tools
+  #+RESULTS[2253c8ef0c6afb76805b58dce010dadabb4f6a83]:
   : /home/sam/.local/bin/pip-compile
-
-* Test script                                                      :noexport:
-  :PROPERTIES:
-  :header-args:bash: :tangle no
-  :END:
-
-  #+begin_src bash :tangle ../tests/doc_python_environment.sh :noweb yes :cache no
-  <<init>>
-  check-all
-  #+end_src
+  :end:

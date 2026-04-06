@@ -1,0 +1,7 @@
+[ralph] starting ralph...
+[ralph] ralph started (PID 16)
+[file] Read: /tmp/ralph-workdir/ralph.yml
+[tool] Bash: mkdir -p .ralph/agent
+[file] Write: /tmp/ralph-workdir/.ralph/agent/scratchpad.md
+[event] event: work.picked
+[ralph] log-level changed to json

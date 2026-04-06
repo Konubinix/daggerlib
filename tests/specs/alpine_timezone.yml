@@ -1,0 +1,4 @@
+func: alpine
+chain:
+  - with-exec: [cat, /etc/timezone]
+  - stdout

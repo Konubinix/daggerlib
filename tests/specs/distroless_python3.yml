@@ -1,0 +1,4 @@
+func: distroless-python-3-debian
+chain:
+  - with-exec: [python3, -c, "import os; print(os.path.exists('/etc/localtime'))"]
+  - stdout

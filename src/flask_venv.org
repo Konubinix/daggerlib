@@ -1,16 +1,11 @@
 #+TITLE: Ready-made Flask virtualenv
 #+LANGUAGE: en
 #+PROPERTY: header-args:python :tangle lib/flask_venv.py
-#+PROPERTY: header-args:bash   :tangle no :var ROOT=(expand-file-name ".." default-directory) :dir (expand-file-name ".." default-directory) :results verbatim :cache yes :session ccd73265-6368-4179-91a5-5c3135fccdb5
+#+PROPERTY: header-args:bash   :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
 
 I often build small Flask APIs. Instead of repeating the venv setup in
 every project, I want a pre-built virtualenv with Flask installed that
 I can copy into my final image.
-
-#+NAME: init
-#+begin_src bash :results none :cache no
-source "./helpers.sh"
-#+end_src
 
 #+begin_src python
 import dagger
@@ -36,20 +31,20 @@ from dagger import function
   #+end_src
 
   #+NAME: flask_venv_export
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: flask-venv
+chain:
+  - export: $TMP/out
+post: test -f "$TMP/out/bin/flask" && echo "bin/flask exists"
+  #+end_src
+
+  #+RESULTS[ab67d2103650dc548cde34da2ee680ec70de10e3]: flask_venv_export
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call flask-venv export --path="$TMP/out" > /dev/null
   test -f "$TMP/out/bin/flask" && echo "bin/flask exists"
   #+end_src
 
-  #+RESULTS[558aad3076879b0fe79a15ada875120bc986feaf]: flask_venv_export
+  #+RESULTS[c20166dfff494f2f51a5f807ea6742b2388848b2]:
   : bin/flask exists
-
-* Test script                                                      :noexport:
-  :PROPERTIES:
-  :header-args:bash: :tangle no
-  :END:
-
-  #+begin_src bash :tangle ../tests/flask_venv.sh :noweb yes :cache no
-  <<init>>
-  check-all
-  #+end_src
+  :end:

@@ -1,7 +1,7 @@
-# [[file:../pip_tools.org::+begin_src python][No heading:2]]
+# [[file:../pip_tools.org::+begin_src python][No heading:1]]
 import dagger
 from dagger import dag, function
-# No heading:2 ends here
+# No heading:1 ends here
 
 
 # [[file:../pip_tools.org::*A pip-tools container][A pip-tools container:1]]

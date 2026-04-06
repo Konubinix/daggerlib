@@ -1,0 +1,4 @@
+func: debian-user
+chain:
+  - with-exec: ["id", sam]
+  - stdout

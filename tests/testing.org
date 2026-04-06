@@ -2,29 +2,10 @@
 #+LANGUAGE: en
 #+PROPERTY: header-args:bash :tangle no
 
-I need a simple way to run all the use-case tests. The test runner uses
-pytest to discover and execute the shell scripts tangled from these org
-files. Since this is a NixOS system, I use a nix-shell shebang to pull
-in pytest without polluting the global environment.
-
-* Test sandbox setup
-  :PROPERTIES:
-  :ID:       06fbb301-14f7-49d9-b466-d0fbe3fa58a5
-  :END:
-
-  Each test script sources =helpers.sh= to set up a sandbox: strict
-  error handling, suppressed nag messages, and a temporary directory
-  available as =$TMP=. Test verification is handled by the
-  =check-result= noweb macro (see =tangle.el=), which diffs actual
-  command output against cached =#+RESULTS= blocks.
-
-  #+begin_src bash :tangle helpers.sh :shebang "#!/usr/bin/env bash"
-    unset HISTFILE
-    TMP=$(mktemp -d)
-    trap 'rm -rf "$TMP"' EXIT
-    export ROOT=$(while [ ! -f dagger.json ]; do [ "$(pwd)" = / ] && { echo "dagger.json not found" >&2; exit 1; }; cd ..; done && pwd)
-    export PATH="${ROOT}/tests:$PATH"
-  #+end_src
+The test suite uses the dagger Python SDK to run specs defined in YAML
+fixture files. Each =fixtureyaml= block in the org files generates a
+spec file and expected-value file under =tests/specs/= and
+=tests/expected/=. The SDK test runner interprets these at test time.
 
 * Test without dagger
   :PROPERTIES:
@@ -39,7 +20,7 @@ in pytest without polluting the global environment.
   #+begin_src bash :tangle ../test-nodagger.sh :shebang "#!/usr/bin/env bash"
   set -eu
   cd "$(dirname "$0")"
-  exec pytest tests/test_use_cases.py -v
+  exec pytest tests/test_sdk.py -v
   #+end_src
 
 * The test entry point
@@ -56,46 +37,127 @@ in pytest without polluting the global environment.
   exec dagger call dev test
   #+end_src
 
-* The pytest runner
+* SDK test fixtures
   :PROPERTIES:
-  :ID:       8129ce4d-51d8-414d-b228-fe178fd6ebd3
+  :ID:       b3c4d5e6-f7a8-9012-bcde-f01234567890
   :END:
 
-  Pytest discovers all =.sh= files in =tests/= (except =helpers.sh=)
-  and runs each one as a separate test case.
+  The =conftest.py= provides a session-scoped =lib= fixture that opens
+  one dagger connection for the entire test run. All SDK tests share it.
 
-  #+begin_src python :tangle test_use_cases.py
-  import os
-  import subprocess
+  #+begin_src python :tangle conftest.py
+  import sys
   from pathlib import Path
 
   import pytest
 
-  TESTS = Path(__file__).parent
-  SKIP = {"helpers.sh", "dagger"}
-  scripts = sorted(f.name for f in TESTS.glob("*.sh") if f.name not in SKIP)
+  import dagger
+
+  ROOT = Path(__file__).resolve().parents[1]
+  sys.path.insert(0, str(ROOT / "src"))
+  from lib import Lib
 
 
-  @pytest.fixture(autouse=True, scope="session")
-  def _dagger_engine():
-      """Fail fast if the dagger engine is unreachable."""
-      subprocess.run(
-          ["dagger", "query", "--silent"],
-          input="{ defaultPlatform }",
-          capture_output=True,
-          text=True,
-          timeout=120,
-          check=True,
-          cwd=str(TESTS),
-          env={**os.environ, "PATH": f"{TESTS}:{os.environ['PATH']}"},
+  @pytest.fixture(scope="session")
+  async def lib():
+      await dagger.connect()
+      try:
+          yield Lib()
+      finally:
+          await dagger.close()
+  #+end_src
+
+  The SDK test runner discovers YAML spec files and their matching
+  expected-value files, then interprets each spec as dagger SDK calls.
+
+  #+begin_src python :tangle test_sdk.py
+  import os
+  import re
+  import subprocess
+  from pathlib import Path
+
+  import pytest
+  import yaml
+
+  from dagger import dag
+
+  ROOT = Path(__file__).resolve().parents[1]
+  SPECS_DIR = Path(__file__).parent / "specs"
+  EXPECTED_DIR = Path(__file__).parent / "expected"
+  spec_files = sorted(SPECS_DIR.glob("*.yml")) if SPECS_DIR.exists() else []
+
+
+  def _kebab_to_snake(name):
+      """Convert dagger CLI kebab-case name to Python snake_case method name.
+
+      Dagger splits on digit boundaries (python3 → python-3), so simple
+      replace("-", "_") doesn't work. First collapse digit boundaries
+      (python-3 → python3), then replace remaining hyphens with underscores.
+      """
+      return re.sub(r"-(\d)", r"\1", name).replace("-", "_")
+
+
+  def resolve_vars(s, tmp_path):
+      """Replace $TMP/${TMP} and $ROOT/${ROOT} in a string."""
+      s = s.replace("${TMP}", str(tmp_path)).replace("$TMP", str(tmp_path))
+      s = s.replace("${ROOT}", str(ROOT)).replace("$ROOT", str(ROOT))
+      return s
+
+
+  def run_shell(cmd, tmp_path):
+      """Run a shell command and return its stdout."""
+      env = {**os.environ, "TMP": str(tmp_path), "ROOT": str(ROOT)}
+      env["PATH"] = str(ROOT / "tests") + ":" + env.get("PATH", "")
+      result = subprocess.run(
+          cmd, shell=True, capture_output=True, text=True, env=env, cwd=str(ROOT),
       )
+      return result.stdout.rstrip("\n")
+
+
+  async def run_spec(lib, spec, tmp_path):
+      """Interpret a YAML spec dict as dagger SDK calls."""
+      if "shell" in spec:
+          return run_shell(spec["shell"], tmp_path)
+
+      func_name = _kebab_to_snake(spec["func"])
+      kwargs = {k.replace("-", "_"): v for k, v in spec.get("args", {}).items()}
+      obj = getattr(lib, func_name)(**kwargs)
+
+      for step in spec.get("chain", []):
+          if step == "stdout":
+              return (await obj.stdout()).rstrip("\n")
+          if not isinstance(step, dict):
+              continue
+          if "with-exec" in step:
+              obj = obj.with_exec(step["with-exec"])
+          elif "file" in step:
+              obj = obj.file(step["file"])
+          elif "export" in step:
+              path = resolve_vars(step["export"], tmp_path)
+              os.makedirs(Path(path).parent, exist_ok=True)
+              await obj.export(path)
+              if "post" in spec:
+                  return run_shell(resolve_vars(spec["post"], tmp_path), tmp_path)
+              return ""
+          elif "with-file" in step:
+              wf = step["with-file"]
+              source = resolve_vars(wf["source"], tmp_path)
+              file_obj = dag.file(Path(source).name, Path(source).read_text())
+              obj = obj.with_file(wf["path"], file_obj)
+      return ""
 
 
   @pytest.mark.parametrize(
-      "script", scripts, ids=[s.removesuffix(".sh") for s in scripts]
+      "spec_file", spec_files, ids=[s.stem for s in spec_files],
   )
-  def test_use_case(script):
-      subprocess.check_call(["bash", "-eu", str(TESTS / script)], cwd=str(TESTS))
+  async def test_spec(lib, tmp_path, spec_file):
+      spec = yaml.safe_load(spec_file.read_text())
+      expected_file = EXPECTED_DIR / spec_file.stem
+      expected = expected_file.read_text() if expected_file.exists() else ""
+      result = await run_spec(lib, spec, tmp_path)
+      assert result == expected.rstrip("\n"), (
+          f"spec {spec_file.stem}: got {result!r}, expected {expected.rstrip(chr(10))!r}"
+      )
   #+end_src
 
 * Dagger wrapper for batch execution

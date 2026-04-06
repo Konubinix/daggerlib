@@ -48,6 +48,8 @@ class Dev:
                     "--break-system-packages",
                     "ruff",
                     "pytest",
+                    "pytest-asyncio",
+                    "pyyaml",
                 ]
             )
             .with_exec(
@@ -161,6 +163,15 @@ class Dev:
             self.container()
             .with_workdir("/work")
             .with_directory("/work", source)
+            .with_exec(
+                [
+                    "pip",
+                    "install",
+                    "--break-system-packages",
+                    "--quiet",
+                    "./sdk",
+                ]
+            )
             .with_exec(
                 ["./test-nodagger.sh"],
                 experimental_privileged_nesting=True,

@@ -1,0 +1,9 @@
+func: debian
+args:
+  extra-packages: [python3-yaml]
+chain:
+  - with-file:
+      path: /tmp/ralph.yml
+      source: "${ROOT}/src/ralph.yml"
+  - with-exec: [python3, -c, "import yaml; d=yaml.safe_load(open('/tmp/ralph.yml')); print(d['event_loop']['starting_event']); print(len(d['hats']))"]
+  - stdout

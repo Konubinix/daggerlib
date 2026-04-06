@@ -1,0 +1,4 @@
+func: alpine-python-user-venv
+chain:
+  - with-exec: [/app/venv/bin/python, -c, "import sys; v=sys.version_info; print('3.10+' if v.major*100+v.minor >= 310 else 'too old')"]
+  - stdout

@@ -1,0 +1,4 @@
+func: alpine-python
+chain:
+  - with-exec: [python3, --version]
+  - stdout

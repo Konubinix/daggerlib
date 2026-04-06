@@ -1,7 +1,7 @@
 #+TITLE: Ralph orchestrator
 #+LANGUAGE: en
 #+PROPERTY: header-args:python :tangle lib/ralph.py
-#+PROPERTY: header-args:bash   :tangle no :var ROOT=(expand-file-name ".." default-directory) :dir (expand-file-name ".." default-directory) :results verbatim :cache yes :session 8a4f1c2e-3d5b-4a6f-9e7c-1b2d3f4a5c6e
+#+PROPERTY: header-args:bash   :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
 
 Ralph is an automated task orchestrator that uses Claude Code to
 implement tasks from a todo list. It reads tasks, generates code,
@@ -12,11 +12,6 @@ pre-configured container and wires up the ralph infrastructure:
 npm packages, git identity, credentials, and patch extraction.
 The caller is responsible for installing their project's own
 dependencies in the container before passing it here.
-
-#+NAME: init
-#+begin_src bash :results none :cache no
-source "./helpers.sh"
-#+end_src
 
 #+begin_src python
 import shlex
@@ -313,23 +308,44 @@ _RALPH_WRAPPER_SH = (Path(__file__).parent / "ralph-wrapper.sh").read_text()
   YAML.
 
   #+NAME: ralph_yml_valid
-  #+begin_src bash
-  dagger call debian --extra-packages="python3-yaml" with-file --path=/tmp/ralph.yml --source="${ROOT}/src/ralph.yml" with-exec --args="python3","-c","import yaml; d=yaml.safe_load(open('/tmp/ralph.yml')); print(d['event_loop']['starting_event']); print(len(d['hats']))" stdout
+  #+begin_src fixtureyaml
+func: debian
+args:
+  extra-packages: [python3-yaml]
+chain:
+  - with-file:
+      path: /tmp/ralph.yml
+      source: "${ROOT}/src/ralph.yml"
+  - with-exec: [python3, -c, "import yaml; d=yaml.safe_load(open('/tmp/ralph.yml')); print(d['event_loop']['starting_event']); print(len(d['hats']))"]
+  - stdout
   #+end_src
 
-  #+RESULTS[574f46501caeeab8dcbeb586afb3aa2c562f8623]: ralph_yml_valid
+  #+RESULTS[b63eaf17944fab7eebf8678cf2d16c197d921765]: ralph_yml_valid
+  :results:
+  #+begin_src bash :exports code :eval no-export
+  dagger call debian --extra-packages=python3-yaml with-file --path=/tmp/ralph.yml --source="${ROOT}/src/ralph.yml" with-exec --args="python3","-c","import yaml; d=yaml.safe_load(open('/tmp/ralph.yml')); print(d['event_loop']['starting_event']); print(len(d['hats']))" stdout
+  #+end_src
+
+  #+RESULTS[8f3b1dcf87e5e221ea3d68d9781e03f6d8d12e96]:
   : work.start
   : 2
+  :end:
 
   The log filter is tested by piping a fixture of real ralph output
   through =ralph-log-filter= and comparing the result.
 
   #+NAME: log_filter_output
-  #+begin_src bash
+  #+begin_src fixtureyaml
+shell: ralph-log-filter < "${ROOT}/tests/ralph_log_sample.txt" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g'
+  #+end_src
+
+  #+RESULTS[b7b743a99cb005c92dd5c68ad6611b266c4c7d69]: log_filter_output
+  :results:
+  #+begin_src bash :exports code :eval no-export
   ralph-log-filter < "${ROOT}/tests/ralph_log_sample.txt" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g'
   #+end_src
 
-  #+RESULTS[bc8ed77e68d1e3e5554116658f925e49ae4a275f]: log_filter_output
+  #+RESULTS[2c3159386493baf6f6912e7c487782d8b35d7ace]:
   : [ralph] starting ralph...
   : [ralph] ralph started (PID 16)
   : [file] Read: /tmp/ralph-workdir/ralph.yml
@@ -337,6 +353,7 @@ _RALPH_WRAPPER_SH = (Path(__file__).parent / "ralph-wrapper.sh").read_text()
   : [file] Write: /tmp/ralph-workdir/.ralph/agent/scratchpad.md
   : [event] event: work.picked
   : [ralph] log-level changed to json
+  :end:
 
 
 * Log filter
@@ -807,14 +824,4 @@ _RALPH_WRAPPER_SH = (Path(__file__).parent / "ralph-wrapper.sh").read_text()
       for label in order:
           if label in selected:
               print(f"  {label}: {len(selected[label].strip())} chars")
-  #+end_src
-
-* Test script                                                      :noexport:
-  :PROPERTIES:
-  :header-args:bash: :tangle no
-  :END:
-
-  #+begin_src bash :tangle ../tests/ralph.sh :noweb yes :cache no
-  <<init>>
-  check-all
   #+end_src

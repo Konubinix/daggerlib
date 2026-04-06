@@ -10,6 +10,7 @@ build-backend = "uv_build"
 
 [tool.pytest.ini_options]
 addopts = "-v"
+asyncio_mode = "auto"
 
 [tool.uv.sources]
 dagger-io = { path = "sdk", editable = true }

@@ -1,0 +1,4 @@
+func: debian
+chain:
+  - with-exec: [cat, /etc/apt/apt.conf.d/01norecommend]
+  - stdout

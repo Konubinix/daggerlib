@@ -3,17 +3,12 @@
 :END:
 #+TITLE: Running CI tests like production
 #+LANGUAGE: en
-#+PROPERTY: header-args:bash :tangle no :var ROOT=(expand-file-name ".." default-directory) :dir (expand-file-name ".." default-directory) :results verbatim :cache yes :session 45e210f8-271e-4ec3-8819-e07c7b29b35d
+#+PROPERTY: header-args:bash :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
 
 I got burned last month: my tests passed in CI but the app crashed in
 production because of a file permission bug. The tests ran as root,
 but production runs as a regular user. I want my CI containers to use
 the same non-root user as production so I catch these issues early.
-
-#+NAME: init
-#+begin_src bash :results none :cache no
-source "./helpers.sh"
-#+end_src
 
 * Making sure the test container runs as a regular user
 
@@ -21,12 +16,22 @@ source "./helpers.sh"
   non-root user, not root:
 
   #+NAME: alpine_user_whoami
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: alpine-user
+chain:
+  - with-exec: [whoami]
+  - stdout
+  #+end_src
+
+  #+RESULTS[84729e04121e22cfb1858e425b78310ab46feb48]: alpine_user_whoami
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call alpine-user with-exec --args="whoami" stdout
   #+end_src
 
-  #+RESULTS[89c71031de63f5053391e7e57e28575f1e65a8f1]: alpine_user_whoami
+  #+RESULTS[598314540270cb528c156af82b8c46b52e84879f]:
   : sam
+  :end:
 
 * The test runner needs a proper home directory
 
@@ -35,12 +40,22 @@ source "./helpers.sh"
   =/nonexistent=:
 
   #+NAME: alpine_user_home
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: alpine-user
+chain:
+  - with-exec: [pwd]
+  - stdout
+  #+end_src
+
+  #+RESULTS[42b210ef97245f0d08c57b8c79d3fccbfc73bbb7]: alpine_user_home
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call alpine-user with-exec --args="pwd" stdout
   #+end_src
 
-  #+RESULTS[f51a8de975a7555410afcbc99e72571308db23eb]: alpine_user_home
+  #+RESULTS[eb99389b500365541b1090dbc071bf550d4dbba6]:
   : /home/sam
+  :end:
 
 * Matching the production UID
 
@@ -49,12 +64,22 @@ source "./helpers.sh"
   identically:
 
   #+NAME: alpine_user_id
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: alpine-user
+chain:
+  - with-exec: ["id", sam]
+  - stdout
+  #+end_src
+
+  #+RESULTS[785ecabca308136d490fbb94e1d4348ee96d0d1e]: alpine_user_id
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call alpine-user with-exec --args="id","sam" stdout
   #+end_src
 
-  #+RESULTS[4e8731433faba3325b6be8079340154a5f35aaa4]: alpine_user_id
+  #+RESULTS[b11dd3ac761d5ca466b7f65120a379da8603ae4c]:
   : uid=1000(sam) gid=1000(sam) groups=1000(sam),1000(sam)
+  :end:
 
 * Some tests need Debian for native libraries
 
@@ -62,19 +87,19 @@ source "./helpers.sh"
   Debian. Same non-root guarantee:
 
   #+NAME: debian_user_id
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: debian-user
+chain:
+  - with-exec: ["id", sam]
+  - stdout
+  #+end_src
+
+  #+RESULTS[7e64e3c9664f58b69957c7ec81573005cf09144c]: debian_user_id
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call debian-user with-exec --args="id","sam" stdout
   #+end_src
 
-  #+RESULTS[b48de886e2dec02c568ecf11d6374a2f03d2556f]: debian_user_id
+  #+RESULTS[2b2983050ff2cd255654a8c58e45e97a477524a7]:
   : uid=1000(sam) gid=1000(sam) groups=1000(sam),100(users)
-
-* Test script                                                      :noexport:
-  :PROPERTIES:
-  :header-args:bash: :tangle no
-  :END:
-
-  #+begin_src bash :tangle ../tests/doc_non_root_user.sh :noweb yes :cache no
-  <<init>>
-  check-all
-  #+end_src
+  :end:

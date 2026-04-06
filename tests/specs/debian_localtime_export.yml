@@ -1,0 +1,4 @@
+func: debian-localtime
+chain:
+  - export: $TMP/out/localtime
+post: test -s "$TMP/out/localtime" && echo "non-empty"

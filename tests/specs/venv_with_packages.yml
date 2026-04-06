@@ -1,0 +1,6 @@
+func: alpine-python-user-venv
+args:
+  packages: [requests]
+chain:
+  - with-exec: [python3, -c, "import requests; print(requests.__name__)"]
+  - stdout

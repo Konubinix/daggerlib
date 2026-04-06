@@ -1,0 +1,6 @@
+func: alpine
+args:
+  extra-packages: [curl]
+chain:
+  - with-exec: [which, curl]
+  - stdout

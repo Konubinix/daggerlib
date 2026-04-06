@@ -1,0 +1,4 @@
+func: flask-venv
+chain:
+  - export: $TMP/out
+post: test -f "$TMP/out/bin/flask" && echo "bin/flask exists"

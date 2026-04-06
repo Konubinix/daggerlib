@@ -1,16 +1,11 @@
 #+TITLE: Minimal production images
 #+LANGUAGE: en
 #+PROPERTY: header-args:python :tangle lib/distroless.py
-#+PROPERTY: header-args:bash   :tangle no :var ROOT=(expand-file-name ".." default-directory) :dir (expand-file-name ".." default-directory) :results verbatim :cache yes :session 7ee378ed-afd5-4298-9618-5db12e00c618
+#+PROPERTY: header-args:bash   :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
 
 For production, I want the smallest possible attack surface. Distroless
 images have no shell, no package manager — just my application and its
 runtime. But I still need the correct timezone.
-
-#+NAME: init
-#+begin_src bash :results none :cache no
-source "./helpers.sh"
-#+end_src
 
 #+begin_src python
 import dagger
@@ -49,12 +44,22 @@ from dagger import dag, function
   #+end_src
 
   #+NAME: distroless_python3
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: distroless-python-3-debian
+chain:
+  - with-exec: [python3, -c, "import os; print(os.path.exists('/etc/localtime'))"]
+  - stdout
+  #+end_src
+
+  #+RESULTS[d317980623c1af8f8f1909a950df23c6a824f852]: distroless_python3
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call distroless-python-3-debian with-exec --args="python3","-c","import os; print(os.path.exists('/etc/localtime'))" stdout
   #+end_src
 
-  #+RESULTS[290b73c80155616aba0a7c6339e639fec4344582]: distroless_python3
+  #+RESULTS[8afe27936e99ecdd030f0f2c8de1d708c620d066]:
   : True
+  :end:
 
 * Distroless static
 
@@ -71,20 +76,21 @@ from dagger import dag, function
   #+end_src
 
   #+NAME: distroless_static_export
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: distroless-debian
+chain:
+  - file: /etc/localtime
+  - export: $TMP/out/localtime
+post: test -s "$TMP/out/localtime" && echo "non-empty"
+  #+end_src
+
+  #+RESULTS[898fbf680e944af3a163e95027be949d214ddc57]: distroless_static_export
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call distroless-debian file --path="/etc/localtime" export --path="$TMP/out/localtime" > /dev/null
   test -s "$TMP/out/localtime" && echo "non-empty"
   #+end_src
 
-  #+RESULTS[99fe7472eb33ce0c83f1ba4e7605b35305a32dbd]: distroless_static_export
+  #+RESULTS[af4f8b1adead4ee814e7c07945c2b765abb9713b]:
   : non-empty
-
-* Test script                                                      :noexport:
-  :PROPERTIES:
-  :header-args:bash: :tangle no
-  :END:
-
-  #+begin_src bash :tangle ../tests/distroless.sh :noweb yes :cache no
-  <<init>>
-  check-all
-  #+end_src
+  :end:

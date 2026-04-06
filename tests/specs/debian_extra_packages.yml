@@ -1,0 +1,6 @@
+func: debian
+args:
+  extra-packages: [curl]
+chain:
+  - with-exec: [which, curl]
+  - stdout

@@ -1,17 +1,12 @@
 #+TITLE: Debian-based production containers
 #+LANGUAGE: en
 #+PROPERTY: header-args:python :tangle lib/debian.py
-#+PROPERTY: header-args:bash   :tangle no :var ROOT=(expand-file-name ".." default-directory) :dir (expand-file-name ".." default-directory) :results verbatim :cache yes :session b11767de-1b79-4370-9d47-fedea7b2fdaa
+#+PROPERTY: header-args:bash   :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
 
 Some of my services need libraries or tools that are only well-packaged
 on Debian. I want Debian slim containers with the same defaults as my
 Alpine ones: correct timezone, no unnecessary packages pulled in, and
 easy user setup.
-
-#+NAME: init
-#+begin_src bash :results none :cache no
-source "./helpers.sh"
-#+end_src
 
 #+begin_src python
 import shlex
@@ -92,29 +87,61 @@ from dagger import dag, function
   #+end_src
 
   #+NAME: debian_timezone
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: debian
+chain:
+  - with-exec: [sh, -c, "readlink -f /etc/localtime"]
+  - stdout
+  #+end_src
+
+  #+RESULTS[6d7961e8901e316fc3b62883aa44306cabf37832]: debian_timezone
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call debian with-exec --args="sh","-c","readlink -f /etc/localtime" stdout
   #+end_src
 
-  #+RESULTS[9af9247a114269e1cc7e21069077778461961a87]: debian_timezone
+  #+RESULTS[2888a8ee6cf352d07f5efc22cf9b9154b2d3485a]:
   : /usr/share/zoneinfo/Europe/Paris
+  :end:
 
   #+NAME: debian_no_recommends
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: debian
+chain:
+  - with-exec: [cat, /etc/apt/apt.conf.d/01norecommend]
+  - stdout
+  #+end_src
+
+  #+RESULTS[b7cd828fbfcda0bd8df973c8305bdc1065da95bf]: debian_no_recommends
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call debian with-exec --args="cat","/etc/apt/apt.conf.d/01norecommend" stdout
   #+end_src
 
-  #+RESULTS[41ec46795ff2efc39919305899ba5b85cf80320e]: debian_no_recommends
+  #+RESULTS[7671b80fff5b33dcc8a2217e5ec239b326dc5eb9]:
   : APT::Install-Recommends "0";
   : APT::Install-Suggests "0";
+  :end:
 
   #+NAME: debian_extra_packages
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: debian
+args:
+  extra-packages: [curl]
+chain:
+  - with-exec: [which, curl]
+  - stdout
+  #+end_src
+
+  #+RESULTS[b5ab50055265f8a19c73bf77469aa9f25dd92ce8]: debian_extra_packages
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call debian --extra-packages=curl with-exec --args="which","curl" stdout
   #+end_src
 
-  #+RESULTS[6053d6097656a94d3d680ab37a2e3d033e166b57]: debian_extra_packages
+  #+RESULTS[ab9b840841d8dba1ff2e90f87fb46a68849c6b3a]:
   : /usr/bin/curl
+  :end:
 
 * Debian with a default user
 
@@ -129,12 +156,22 @@ from dagger import dag, function
   #+end_src
 
   #+NAME: debian_user_check
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: debian-user
+chain:
+  - with-exec: ["id", sam]
+  - stdout
+  #+end_src
+
+  #+RESULTS[7e64e3c9664f58b69957c7ec81573005cf09144c]: debian_user_check
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call debian-user with-exec --args="id","sam" stdout
   #+end_src
 
-  #+RESULTS[d1c769fc0d3deb2653978b404b5f8da13d819d60]: debian_user_check
+  #+RESULTS[2b2983050ff2cd255654a8c58e45e97a477524a7]:
   : uid=1000(sam) gid=1000(sam) groups=1000(sam),100(users)
+  :end:
 
 * Python with a user and virtualenv on Debian
 
@@ -156,12 +193,22 @@ from dagger import dag, function
   #+end_src
 
   #+NAME: debian_python_user_venv_check
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: debian-python-user-venv
+chain:
+  - with-exec: [sh, -c, "test -d /app/venv && /app/venv/bin/python --version"]
+  - stdout
+  #+end_src
+
+  #+RESULTS[edff76b97232adf7cbd5a67a7705916ca3500770]: debian_python_user_venv_check
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call debian-python-user-venv with-exec --args="sh","-c","test -d /app/venv && /app/venv/bin/python --version" stdout
   #+end_src
 
-  #+RESULTS[ed4afca4883fddab45905885d918cc6252e6a597]: debian_python_user_venv_check
+  #+RESULTS[b5dd97168b748155cec4d48a964c17c2e41c04ac]:
   : Python 3.13.5
+  :end:
 
 * Extracting the localtime file
 
@@ -181,20 +228,20 @@ from dagger import dag, function
   #+end_src
 
   #+NAME: debian_localtime_export
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: debian-localtime
+chain:
+  - export: $TMP/out/localtime
+post: test -s "$TMP/out/localtime" && echo "non-empty"
+  #+end_src
+
+  #+RESULTS[777620baf080169887ef8ae5cf6598961515df73]: debian_localtime_export
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call debian-localtime export --path="$TMP/out/localtime" > /dev/null
   test -s "$TMP/out/localtime" && echo "non-empty"
   #+end_src
 
-  #+RESULTS[ad51dddfce1c768c5f590d0d4b2cbdd289b778a0]: debian_localtime_export
+  #+RESULTS[0311bc4f560d7f8bb92ef7ad0f8be2e3b53f6049]:
   : non-empty
-
-* Test script                                                      :noexport:
-  :PROPERTIES:
-  :header-args:bash: :tangle no
-  :END:
-
-  #+begin_src bash :tangle ../tests/debian.sh :noweb yes :cache no
-  <<init>>
-  check-all
-  #+end_src
+  :end:

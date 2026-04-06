@@ -92,7 +92,7 @@ ORG_PIN = "1025e3b49a98f175b124dbccd774918360fe7e11"
               .with_exec(
                   [
                       "pip", "install", "--break-system-packages",
-                      "ruff", "pytest",
+                      "ruff", "pytest", "pytest-asyncio", "pyyaml",
                   ]
               )
               .with_exec(
@@ -198,6 +198,12 @@ ORG_PIN = "1025e3b49a98f175b124dbccd774918360fe7e11"
               self.container()
               .with_workdir("/work")
               .with_directory("/work", source)
+              .with_exec(
+                  [
+                      "pip", "install", "--break-system-packages",
+                      "--quiet", "./sdk",
+                  ]
+              )
               .with_exec(
                   ["./test-nodagger.sh"],
                   experimental_privileged_nesting=True,

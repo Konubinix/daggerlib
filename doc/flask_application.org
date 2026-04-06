@@ -3,18 +3,13 @@
 :END:
 #+TITLE: Shipping a webhook receiver
 #+LANGUAGE: en
-#+PROPERTY: header-args:bash :tangle no :var ROOT=(expand-file-name ".." default-directory) :dir (expand-file-name ".." default-directory) :results verbatim :cache yes :session b89fbc88-ccd7-4144-8c63-ab84e0ab58a7
+#+PROPERTY: header-args:bash :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
 
 I want to build a webhook receiver that listens for GitHub events and
 triggers deployments. It's a small Flask app — a single file with a
 few routes. I need to package it in a container, and I don't want to
 write the venv setup from scratch every time I start a new
 microservice like this.
-
-#+NAME: init
-#+begin_src bash :results none :cache no
-source "./helpers.sh"
-#+end_src
 
 * Getting a ready-made Flask environment
 
@@ -23,13 +18,23 @@ source "./helpers.sh"
   that the =flask= command is available:
 
   #+NAME: flask_venv_export
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: flask-venv
+chain:
+  - export: $TMP/out
+post: test -f "$TMP/out/bin/flask" && echo "bin/flask exists"
+  #+end_src
+
+  #+RESULTS[ab67d2103650dc548cde34da2ee680ec70de10e3]: flask_venv_export
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call flask-venv export --path="$TMP/out" > /dev/null
   test -f "$TMP/out/bin/flask" && echo "bin/flask exists"
   #+end_src
 
-  #+RESULTS[4d6af036b2191b4b53459915d56bfd636061d05f]: flask_venv_export
+  #+RESULTS[c20166dfff494f2f51a5f807ea6742b2388848b2]:
   : bin/flask exists
+  :end:
 
 * Adding gunicorn for production
 
@@ -37,20 +42,22 @@ source "./helpers.sh"
   as the WSGI server. I can add it to the same venv:
 
   #+NAME: flask_with_gunicorn
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: flask-venv
+args:
+  packages: [gunicorn]
+chain:
+  - export: $TMP/out2
+post: test -f "$TMP/out2/bin/gunicorn" && echo "bin/gunicorn exists"
+  #+end_src
+
+  #+RESULTS[5513a5e29d18cd329ab4c98287ddedc740ca8873]: flask_with_gunicorn
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call flask-venv --packages=gunicorn export --path="$TMP/out2" > /dev/null
   test -f "$TMP/out2/bin/gunicorn" && echo "bin/gunicorn exists"
   #+end_src
 
-  #+RESULTS[10fa355b485f3fcdf3ad6e259efb5a830ee8395f]: flask_with_gunicorn
+  #+RESULTS[5df1a8788ffb795e3e6f04b16204691d7c3f4b05]:
   : bin/gunicorn exists
-
-* Test script                                                      :noexport:
-  :PROPERTIES:
-  :header-args:bash: :tangle no
-  :END:
-
-  #+begin_src bash :tangle ../tests/doc_flask_application.sh :noweb yes :cache no
-  <<init>>
-  check-all
-  #+end_src
+  :end:

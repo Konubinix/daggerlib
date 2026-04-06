@@ -1,0 +1,4 @@
+func: pip-tools
+chain:
+  - with-exec: [which, pip-compile]
+  - stdout

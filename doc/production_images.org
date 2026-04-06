@@ -3,18 +3,13 @@
 :END:
 #+TITLE: Shipping a Python service to production
 #+LANGUAGE: en
-#+PROPERTY: header-args:bash :tangle no :var ROOT=(expand-file-name ".." default-directory) :dir (expand-file-name ".." default-directory) :results verbatim :cache yes :session d0620fad-89cd-46ca-91b0-87e83de7b539
+#+PROPERTY: header-args:bash :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
 
 I have a Python service that passed all its tests and I want to ship
 it. The build needs compilers and dev headers to install native
 dependencies, but in production I want the smallest possible image —
 no shell, no package manager, nothing an attacker could use. This is
 the classic multi-stage build: build in Debian, run in distroless.
-
-#+NAME: init
-#+begin_src bash :results none :cache no
-source "./helpers.sh"
-#+end_src
 
 * Preparing timezone data for the production image
 
@@ -24,14 +19,24 @@ source "./helpers.sh"
   service logs need correct French timestamps:
 
   #+NAME: tz_artifacts
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: alpine-tz
+chain:
+  - export: $TMP/out
+post: ls "$TMP/out" | sort
+  #+end_src
+
+  #+RESULTS[0d46007e31434b56ca64560cf721fa4de2690aef]: tz_artifacts
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call alpine-tz export --path="$TMP/out" > /dev/null
   ls "$TMP/out" | sort
   #+end_src
 
-  #+RESULTS[f2500b1d9138f8f2c544c3d9a3556bb4cf873bf3]: tz_artifacts
+  #+RESULTS[501fd8e2b72c5b4334e89b88212de0d39472e2e0]:
   : localtime
   : timezone
+  :end:
 
 * Verifying the Python production runtime
 
@@ -40,12 +45,22 @@ source "./helpers.sh"
   I verify that the timezone is correctly injected:
 
   #+NAME: distroless_python
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: distroless-python-3-debian
+chain:
+  - with-exec: [python3, -c, "import os; print(os.path.exists('/etc/localtime'))"]
+  - stdout
+  #+end_src
+
+  #+RESULTS[d317980623c1af8f8f1909a950df23c6a824f852]: distroless_python
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call distroless-python-3-debian with-exec --args="python3","-c","import os; print(os.path.exists('/etc/localtime'))" stdout
   #+end_src
 
-  #+RESULTS[14d26b6f6239799c78ab602157c822a8c067d869]: distroless_python
+  #+RESULTS[8afe27936e99ecdd030f0f2c8de1d708c620d066]:
   : True
+  :end:
 
 * The static variant for compiled services
 
@@ -54,20 +69,21 @@ source "./helpers.sh"
   binary and the timezone file:
 
   #+NAME: distroless_static
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: distroless-debian
+chain:
+  - file: /etc/localtime
+  - export: $TMP/out2/localtime
+post: test -s "$TMP/out2/localtime" && echo "non-empty"
+  #+end_src
+
+  #+RESULTS[e80ddd87f03114900390c11b707735f7a03b43db]: distroless_static
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call distroless-debian file --path="/etc/localtime" export --path="$TMP/out2/localtime" > /dev/null
   test -s "$TMP/out2/localtime" && echo "non-empty"
   #+end_src
 
-  #+RESULTS[b09769f419af6c9241f3d4a6fb1f5799eba544d5]: distroless_static
+  #+RESULTS[22bf43eaa61b484a5dd48c990ec5d3aa935b11a3]:
   : non-empty
-
-* Test script                                                      :noexport:
-  :PROPERTIES:
-  :header-args:bash: :tangle no
-  :END:
-
-  #+begin_src bash :tangle ../tests/doc_production_images.sh :noweb yes :cache no
-  <<init>>
-  check-all
-  #+end_src
+  :end:

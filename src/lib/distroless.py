@@ -1,7 +1,7 @@
-# [[file:../distroless.org::+begin_src python][No heading:2]]
+# [[file:../distroless.org::+begin_src python][No heading:1]]
 import dagger
 from dagger import dag, function
-# No heading:2 ends here
+# No heading:1 ends here
 
 
 # [[file:../distroless.org::*Setting the timezone on distroless][Setting the timezone on distroless:1]]

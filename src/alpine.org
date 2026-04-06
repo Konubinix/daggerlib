@@ -4,18 +4,13 @@
 #+TITLE: Lightweight timezone-aware containers
 #+LANGUAGE: en
 #+PROPERTY: header-args:python :tangle lib/alpine.py
-#+PROPERTY: header-args:bash   :tangle no :var ROOT=(expand-file-name ".." default-directory) :dir (expand-file-name ".." default-directory) :results verbatim :cache yes :session 6b362c1c-840e-414f-ac4e-3a71451a6dff
+#+PROPERTY: header-args:bash   :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
 
 I need containers where logs and cron jobs use the correct timezone by
 default, without having to configure it in every project. Alpine is my
 go-to base image because it's small and fast to pull. The timezone
 defaults to Europe/Paris but is configurable via the =Lib.timezone=
 field.
-
-#+NAME: init
-#+begin_src bash :results none :cache no
-source "./helpers.sh"
-#+end_src
 
 #+begin_src python
 import dagger
@@ -52,12 +47,22 @@ from dagger import dag, function
   We can verify the timezone is correctly set:
 
   #+NAME: alpine_timezone
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: alpine
+chain:
+  - with-exec: [cat, /etc/timezone]
+  - stdout
+  #+end_src
+
+  #+RESULTS[1713d76d13c912707056a7da0e52576cd98eca78]: alpine_timezone
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call alpine with-exec --args="cat","/etc/timezone" stdout
   #+end_src
 
-  #+RESULTS[6285cc8d866abdbf20f8af3c68841ce7eaa6270c]: alpine_timezone
+  #+RESULTS[edceca51788f31fff4bb68c4a0d2b6971d923738]:
   : Europe/Paris
+  :end:
 
 * A base Alpine container with optional extra packages
   :PROPERTIES:
@@ -84,12 +89,24 @@ from dagger import dag, function
   #+end_src
 
   #+NAME: alpine_extra_packages
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: alpine
+args:
+  extra-packages: [curl]
+chain:
+  - with-exec: [which, curl]
+  - stdout
+  #+end_src
+
+  #+RESULTS[4cd8426869dd414aedd75362cd94eb25dfa1466c]: alpine_extra_packages
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call alpine --extra-packages=curl with-exec --args="which","curl" stdout
   #+end_src
 
-  #+RESULTS[9672241fbf1dcd6682c42c269a24fd2b8c2725cf]: alpine_extra_packages
+  #+RESULTS[1e58f619f899b7a0230caf874bc01d3c559d7f55]:
   : /usr/bin/curl
+  :end:
 
 * A non-root user for safer workflows
   :PROPERTIES:
@@ -112,12 +129,22 @@ from dagger import dag, function
   #+end_src
 
   #+NAME: alpine_user_check
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: alpine-user
+chain:
+  - with-exec: ["id", sam]
+  - stdout
+  #+end_src
+
+  #+RESULTS[785ecabca308136d490fbb94e1d4348ee96d0d1e]: alpine_user_check
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call alpine-user with-exec --args="id","sam" stdout
   #+end_src
 
-  #+RESULTS[a88fe2bffd894b6e3e8116b0acbf05d468a06775]: alpine_user_check
+  #+RESULTS[b11dd3ac761d5ca466b7f65120a379da8603ae4c]:
   : uid=1000(sam) gid=1000(sam) groups=1000(sam),1000(sam)
+  :end:
 
 * Timezone artifacts for other containers
   :PROPERTIES:
@@ -145,14 +172,24 @@ from dagger import dag, function
   #+end_src
 
   #+NAME: alpine_tz_export
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: alpine-tz
+chain:
+  - export: $TMP/out
+post: ls "$TMP/out" | sort
+  #+end_src
+
+  #+RESULTS[0d46007e31434b56ca64560cf721fa4de2690aef]: alpine_tz_export
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call alpine-tz export --path="$TMP/out" > /dev/null
   ls "$TMP/out" | sort
   #+end_src
 
-  #+RESULTS[da27b1744f7bd1b8ad6f3712e61b9b99f606ef97]: alpine_tz_export
+  #+RESULTS[501fd8e2b72c5b4334e89b88212de0d39472e2e0]:
   : localtime
   : timezone
+  :end:
 
 * Python on Alpine
   :PROPERTIES:
@@ -169,12 +206,22 @@ from dagger import dag, function
   #+end_src
 
   #+NAME: alpine_python_check
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: alpine-python
+chain:
+  - with-exec: [python3, --version]
+  - stdout
+  #+end_src
+
+  #+RESULTS[ce1cdd33de659d3d3454c9dd82be9c15a7cea23f]: alpine_python_check
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call alpine-python with-exec --args="python3","--version" stdout
   #+end_src
 
-  #+RESULTS[2aa5fa288b922592ae58cf5d7d5dafbe52743182]: alpine_python_check
+  #+RESULTS[830ae8dc6a0872480c157b5d386af8631ad6cee7]:
   : Python 3.12.12
+  :end:
 
 * Python with a user and virtualenv
   :PROPERTIES:
@@ -203,19 +250,19 @@ from dagger import dag, function
   #+end_src
 
   #+NAME: alpine_python_user_venv_check
-  #+begin_src bash
+  #+begin_src fixtureyaml
+func: alpine-python-user-venv
+chain:
+  - with-exec: [sh, -c, "test -d /app/venv && /app/venv/bin/python --version"]
+  - stdout
+  #+end_src
+
+  #+RESULTS[08993d5c749ec2121caa66897c5a6dc7890bbb6f]: alpine_python_user_venv_check
+  :results:
+  #+begin_src bash :exports code :eval no-export
   dagger call alpine-python-user-venv with-exec --args="sh","-c","test -d /app/venv && /app/venv/bin/python --version" stdout
   #+end_src
 
-  #+RESULTS[a21781cec8839610553947b7d2977c5a79084466]: alpine_python_user_venv_check
+  #+RESULTS[2e20e636df872a948b9a17f1b5a7237c28361ef0]:
   : Python 3.12.12
-
-* Test script                                                      :noexport:
-  :PROPERTIES:
-  :header-args:bash: :tangle no
-  :END:
-
-  #+begin_src bash :tangle ../tests/alpine.sh :noweb yes :cache no
-  <<init>>
-  check-all
-  #+end_src
+  :end:

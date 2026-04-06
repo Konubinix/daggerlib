@@ -4,16 +4,11 @@
 #+TITLE: Python dependency management
 #+LANGUAGE: en
 #+PROPERTY: header-args:python :tangle lib/pip_tools.py
-#+PROPERTY: header-args:bash   :tangle no :var ROOT=(expand-file-name ".." default-directory) :dir (expand-file-name ".." default-directory) :results verbatim :cache yes :session 1c493c7b-141e-48c4-b132-a38197098f62
+#+PROPERTY: header-args:bash   :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
 
 I manage Python dependencies with =pip-tools= (=pip-compile= and
 =pip-sync=). I need a ready-made container with these tools installed
 and a non-root user.
-
-#+NAME: init
-#+begin_src bash :results none :cache no
-source "./helpers.sh"
-#+end_src
 
 #+begin_src python
 import dagger
@@ -40,22 +35,19 @@ from dagger import dag, function
   #+end_src
 
   #+NAME: pip_tools_available
-  #+begin_src bash
-    dagger call pip-tools with-exec --args="which","pip-compile" stdout
+  #+begin_src fixtureyaml
+func: pip-tools
+chain:
+  - with-exec: [which, pip-compile]
+  - stdout
   #+end_src
 
-  #+RESULTS[1ff06bd900573c925126e227b808e405706248cc]: pip_tools_available
+  #+RESULTS[3d4f99572dedc99c5ea9309649872d1976a05339]: pip_tools_available
+  :results:
+  #+begin_src bash :exports code :eval no-export
+  dagger call pip-tools with-exec --args="which","pip-compile" stdout
+  #+end_src
+
+  #+RESULTS[2253c8ef0c6afb76805b58dce010dadabb4f6a83]:
   : /home/sam/.local/bin/pip-compile
-
-
-
-* Test script                                                      :noexport:
-  :PROPERTIES:
-  :header-args:bash: :tangle no
-  :ID:       1c08ec10-d4cf-4494-a63f-5518e80d065d
-  :END:
-
-  #+begin_src bash :tangle ../tests/pip_tools.sh :noweb yes :cache no
-  <<init>>
-  check-all
-  #+end_src
+  :end:
