@@ -1,12 +1,8 @@
 # [[file:../ralph.org::+begin_src python][No heading:1]]
 import shlex
-from pathlib import Path
-from typing import Annotated
 
 import dagger
-from dagger import DefaultPath, dag, function
-
-_RALPH_WRAPPER_SH = (Path(__file__).parent / "ralph-wrapper.sh").read_text()
+from dagger import dag, function
 # No heading:1 ends here
 
 
@@ -117,6 +113,7 @@ def _ralph_credentials(
 def _ralph_run(
     self,
     ctr: dagger.Container,
+    src: dagger.Directory,
     work_dir: str,
     ralph_args: str,
     consul_addr: str,
@@ -124,9 +121,9 @@ def _ralph_run(
 ) -> dagger.Container:
     """Run ralph wrapper and generate patches."""
     ctr = (
-        ctr.with_new_file(
+        ctr.with_file(
             "/tmp/ralph-wrapper.sh",
-            _RALPH_WRAPPER_SH,
+            src.file("src/lib/ralph-wrapper.sh"),
         )
         .with_env_variable(
             "WORK_DIR",
@@ -166,7 +163,7 @@ def _ralph_run(
 async def ralph(
     self,
     claude_credentials: dagger.Secret,
-    src: Annotated[dagger.Directory, DefaultPath(".")],
+    src: dagger.Directory | None = None,
     ctr: dagger.Container | None = None,
     extra_packages: list[str] = (),
     ralph_args: str = "",
@@ -181,7 +178,12 @@ async def ralph(
     plan_md: dagger.File | None = None,
     todo_org: dagger.File | None = None,
 ) -> dagger.Directory:
-    """Run ralph orchestrator in a container and return the workdir with patches."""
+    """Run ralph orchestrator in a container and return the workdir with patches.
+
+    src is the module source directory; defaults to the current directory.
+    """
+    if src is None:
+        src = dag.address(".").directory()
     username = username or self.default_username
     if ctr is None:
         ctr = self.debian_python_user_venv(
@@ -193,7 +195,7 @@ async def ralph(
     ctr = self._ralph_git(ctr, git_email, git_name)
     ctr = self._ralph_workdir(ctr, src, work_dir, owner, ralph_yml, plan_md, todo_org)
     ctr = self._ralph_credentials(ctr, home, claude_credentials, owner)
-    ctr = self._ralph_run(ctr, work_dir, ralph_args, consul_addr, consul_key)
+    ctr = self._ralph_run(ctr, src, work_dir, ralph_args, consul_addr, consul_key)
     return ctr.directory(work_dir)
 
 

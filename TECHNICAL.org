@@ -159,6 +159,56 @@ programming setup, tangling pipeline, and editor configuration. See
   ./tangle.sh
   #+end_src
 
+* Source directory convention
+
+  Some functions need files from the module source tree (shell scripts,
+  config files). There are two patterns depending on context.
+
+** =dag.address(".")= for Lib functions (tested via the harness)
+
+   =DefaultPath(".")= is resolved by the Dagger CLI, but the Python
+   test harness calls functions directly — =DefaultPath= never fires.
+   For functions that must work in both contexts, use an explicit
+   =src: dagger.Directory | None = None= parameter with a fallback
+   to =dag.address(".").directory()=:
+
+   #+begin_src python :tangle no
+   def my_function(
+       self,
+       src: dagger.Directory | None = None,
+   ) -> dagger.Container:
+       if src is None:
+           src = dag.address(".").directory()
+       return (
+           dag.container().from_("...")
+           .with_file("/tmp/script.sh", src.file("src/lib/script.sh"))
+           .with_exec(["sh", "/tmp/script.sh"])
+       )
+   #+end_src
+
+   This works everywhere:
+   - =dagger call= (CLI resolves "." to the module context)
+   - Python test harness (pytest resolves "." to the working directory)
+   - Direct SDK usage (caller can pass any directory)
+
+   The shell scripts themselves live in tangled =.sh= files under
+   =src/lib/=, keeping shell code in shell and Python code in Python.
+
+** =DefaultPath(".")= for Dev functions (CLI-only)
+
+   [[file:src/dev.org][Dev]] functions (=tangle=, =run=, =test=) keep using
+   =DefaultPath(".")=. They are the exception because:
+
+   1. They mount the *entire project root* as a working directory
+      (scripts, =sdk/=, org files, etc.), not just a file or two.
+   2. =dag.address(".")= inside a module does not resolve to the
+      CLI-provided context directory — it resolves to wherever the
+      engine is running, which lacks project files.
+   3. =dag.current_module().source()= returns the module's source
+      subdirectory, not the project root.
+   4. They are only ever called via =dagger call= (never from the
+      Python test harness), so =DefaultPath= always fires.
+
 * Reproducibility helpers
 
   Helpers loaded both by =tangle.el= (batch) and =.dir-locals.el=

@@ -63,6 +63,15 @@ ORG_PIN = (Path(__file__).resolve().parents[2] / ".org-pin").read_text().strip()
   - =test= runs the test suite via =test-nodagger.sh= (pytest).
     Nested dagger access is required.
 
+  These three functions use =DefaultPath(".")= instead of the
+  [[file:../TECHNICAL.org::*Source directory convention][=dag.address(".")= pattern]] because they mount the entire
+  project root as a working directory — scripts, =sdk/=, org files
+  and all.  Inside a module, =dag.address(".")= does not resolve to
+  the CLI-provided context, and =dag.current_module().source()=
+  returns only the module's source subdirectory.  This is fine: Dev
+  functions are only called via =dagger call=, never from the Python
+  test harness, so =DefaultPath= always fires.
+
   #+begin_src python
   @object_type
   class Dev:
