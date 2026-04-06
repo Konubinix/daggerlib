@@ -102,6 +102,23 @@ class Dev:
         )
         return ctr
 
+    def _work_container(
+        self,
+        source: dagger.Directory,
+        with_org: bool = False,
+    ) -> dagger.Container:
+        """Mount source into /work, optionally symlinking pinned org-mode."""
+        ctr = self.container().with_workdir("/work").with_directory("/work", source)
+        if with_org:
+            ctr = ctr.with_exec(
+                [
+                    "sh",
+                    "-c",
+                    "mkdir -p .tangle-deps && ln -sf /opt/org .tangle-deps/org",
+                ]
+            )
+        return ctr
+
     @function
     async def tangle(
         self,
@@ -109,16 +126,7 @@ class Dev:
     ) -> dagger.Directory:
         """Tangle all org files, returning the directory with generated code."""
         return await (
-            self.container()
-            .with_workdir("/work")
-            .with_directory("/work", source)
-            .with_exec(
-                [
-                    "sh",
-                    "-c",
-                    "mkdir -p .tangle-deps && ln -sf /opt/org .tangle-deps/org",
-                ]
-            )
+            self._work_container(source, with_org=True)
             .with_exec(
                 [
                     "sh",
@@ -137,16 +145,7 @@ class Dev:
     ) -> dagger.Directory:
         """Execute org-babel blocks and save results."""
         return await (
-            self.container()
-            .with_workdir("/work")
-            .with_directory("/work", source)
-            .with_exec(
-                [
-                    "sh",
-                    "-c",
-                    "mkdir -p .tangle-deps && ln -sf /opt/org .tangle-deps/org",
-                ]
-            )
+            self._work_container(source, with_org=True)
             .with_exec(
                 ["./run-nodagger.sh"],
                 experimental_privileged_nesting=True,
@@ -161,9 +160,7 @@ class Dev:
     ) -> str:
         """Run the test suite."""
         return await (
-            self.container()
-            .with_workdir("/work")
-            .with_directory("/work", source)
+            self._work_container(source)
             .with_exec(
                 [
                     "pip",

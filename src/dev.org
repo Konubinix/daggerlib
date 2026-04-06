@@ -51,21 +51,17 @@ ORG_PIN = (Path(__file__).resolve().parents[2] / ".org-pin").read_text().strip()
   and the dagger CLI for nested calls. Pinned org-mode is cloned
   during container build so that dagger caches it.
 
-  =tangle= tangles all org files inside the container. The pinned
-  org-mode from the container is symlinked into the work directory so
-  that =tangle-nodagger.sh= skips the clone step.
-  =tangle-nodagger.sh= accepts file arguments, so we pass all org
-  files to get a full tangle (its no-args default only tangles
-  bootstrap files).
+  =_work_container= mounts the source into =/work= and optionally
+  symlinks the pinned org-mode so =tangle-nodagger.sh= skips the
+  clone step. All three operations build on it:
 
-  =run= executes all org-babel blocks and saves results. Like
-  =tangle=, it delegates to the =-nodagger= variant:
-  =run-nodagger.sh= uses emacs in batch mode to run the blocks.
-  The bash blocks call dagger, so nested access is required.
-
-  =test= runs the full test suite via =test-nodagger.sh=, which
-  calls pytest. The test scripts call =dagger call=, so nested
-  dagger access is required.
+  - =tangle= tangles all org files. =tangle-nodagger.sh= accepts
+    file arguments, so we pass all org files to get a full tangle
+    (its no-args default only tangles bootstrap files).
+  - =run= executes all org-babel blocks via =run-nodagger.sh=.
+    The bash blocks call dagger, so nested access is required.
+  - =test= runs the test suite via =test-nodagger.sh= (pytest).
+    Nested dagger access is required.
 
   #+begin_src python
   @object_type
@@ -140,6 +136,26 @@ ORG_PIN = (Path(__file__).resolve().parents[2] / ".org-pin").read_text().strip()
           )
           return ctr
 
+      def _work_container(
+          self,
+          source: dagger.Directory,
+          with_org: bool = False,
+      ) -> dagger.Container:
+          """Mount source into /work, optionally symlinking pinned org-mode."""
+          ctr = (
+              self.container()
+              .with_workdir("/work")
+              .with_directory("/work", source)
+          )
+          if with_org:
+              ctr = ctr.with_exec(
+                  [
+                      "sh", "-c",
+                      "mkdir -p .tangle-deps && ln -sf /opt/org .tangle-deps/org",
+                  ]
+              )
+          return ctr
+
       @function
       async def tangle(
           self,
@@ -147,15 +163,7 @@ ORG_PIN = (Path(__file__).resolve().parents[2] / ".org-pin").read_text().strip()
       ) -> dagger.Directory:
           """Tangle all org files, returning the directory with generated code."""
           return await (
-              self.container()
-              .with_workdir("/work")
-              .with_directory("/work", source)
-              .with_exec(
-                  [
-                      "sh", "-c",
-                      "mkdir -p .tangle-deps && ln -sf /opt/org .tangle-deps/org",
-                  ]
-              )
+              self._work_container(source, with_org=True)
               .with_exec(
                   [
                       "sh", "-c",
@@ -173,15 +181,7 @@ ORG_PIN = (Path(__file__).resolve().parents[2] / ".org-pin").read_text().strip()
       ) -> dagger.Directory:
           """Execute org-babel blocks and save results."""
           return await (
-              self.container()
-              .with_workdir("/work")
-              .with_directory("/work", source)
-              .with_exec(
-                  [
-                      "sh", "-c",
-                      "mkdir -p .tangle-deps && ln -sf /opt/org .tangle-deps/org",
-                  ]
-              )
+              self._work_container(source, with_org=True)
               .with_exec(
                   ["./run-nodagger.sh"],
                   experimental_privileged_nesting=True,
@@ -196,9 +196,7 @@ ORG_PIN = (Path(__file__).resolve().parents[2] / ".org-pin").read_text().strip()
       ) -> str:
           """Run the test suite."""
           return await (
-              self.container()
-              .with_workdir("/work")
-              .with_directory("/work", source)
+              self._work_container(source)
               .with_exec(
                   [
                       "pip", "install", "--break-system-packages",
