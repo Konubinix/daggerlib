@@ -7,8 +7,11 @@ from dagger import dag, function
 # [[file:../distroless.org::*Setting the timezone on distroless][Setting the timezone on distroless:1]]
 @function
 def distroless_set_tz(self, ctr: dagger.Container) -> dagger.Container:
-    """Copy localtime into a distroless container (uses Lib.timezone)."""
-    return ctr.with_file("/etc/localtime", self.debian_localtime())
+    """Copy timezone artifacts into a distroless container (uses Lib.timezone)."""
+    tz = self.alpine_tz()
+    return ctr.with_file("/etc/localtime", tz.file("localtime")).with_file(
+        "/etc/timezone", tz.file("timezone")
+    )
 
 
 # Setting the timezone on distroless:1 ends here

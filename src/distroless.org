@@ -14,8 +14,10 @@ from dagger import dag, function
 
 * Setting the timezone on distroless
 
-  Distroless can't run =apt= or =apk=. We copy the timezone file extracted
-  from Debian (via [[file:debian.org::*Extracting the localtime file][debian_localtime]]) directly into the image.
+  Distroless can't run =apt= or =apk=. We copy the timezone artifacts
+  from [[file:alpine.org::*Timezone artifacts for other containers][alpine_tz]] directly into the image — Alpine is lighter than
+  Debian and =alpine_tz()= already extracts both =/etc/localtime= and
+  =/etc/timezone=.
 
   [[https://docs.dagger.io/api/reference#definition-Container][.with_file(path, file)]] copies a =File= artifact into the container
   at the given path — like =COPY= in a Dockerfile. This is the only way
@@ -25,8 +27,13 @@ from dagger import dag, function
   #+begin_src python
   @function
   def distroless_set_tz(self, ctr: dagger.Container) -> dagger.Container:
-      """Copy localtime into a distroless container (uses Lib.timezone)."""
-      return ctr.with_file("/etc/localtime", self.debian_localtime())
+      """Copy timezone artifacts into a distroless container (uses Lib.timezone)."""
+      tz = self.alpine_tz()
+      return (
+          ctr
+          .with_file("/etc/localtime", tz.file("localtime"))
+          .with_file("/etc/timezone", tz.file("timezone"))
+      )
   #+end_src
 
 * Distroless Python 3
