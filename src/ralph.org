@@ -316,17 +316,21 @@ from dagger import dag, function
   async def ralph(
       self,
       claude_credentials: dagger.Secret,
+      # Container
       src: dagger.Directory | None = None,
       ctr: dagger.Container | None = None,
       extra_packages: list[str] = (),
-      ralph_args: str = "",
-      work_dir: str = "/tmp/ralph-workdir",
+      username: str | None = None,
+      # Git identity
       git_email: str = "ralph@localhost",
       git_name: str = "Ralph",
-      username: str | None = None,
+      # Execution
+      ralph_args: str = "",
+      work_dir: str = "/tmp/ralph-workdir",
       dagger_runner_host: str = "",
       consul_addr: str = "",
       consul_key: str = "ralph/dagger/status",
+      # File overrides
       ralph_yml: dagger.File | None = None,
       plan_md: dagger.File | None = None,
       todo_org: dagger.File | None = None,
