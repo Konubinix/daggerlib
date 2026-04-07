@@ -49,13 +49,13 @@ chain:
   - stdout
   #+end_src
 
-  #+RESULTS[4cd8426869dd414aedd75362cd94eb25dfa1466c]: alpine_extra_packages
+  #+RESULTS[08aa47b91718715981668a455eda0715fdaf77db]: alpine_extra_packages
   :results:
   #+begin_src bash :exports code :eval no-export
   dagger call alpine --distro-packages=curl with-exec --args="which","curl" stdout
   #+end_src
 
-  #+RESULTS[1e58f619f899b7a0230caf874bc01d3c559d7f55]:
+  #+RESULTS[200c50ddd922bfbca5025152685fe86be635771f]:
   : /usr/bin/curl
   :end:
 

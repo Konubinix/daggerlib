@@ -73,13 +73,13 @@ chain:
   - stdout
   #+end_src
 
-  #+RESULTS[2279418495073d49b151dc0fccb23491e51c0e99]: venv_with_packages
+  #+RESULTS[23f822eed89c8fc9809e3c34506e6aad19986174]: venv_with_packages
   :results:
   #+begin_src bash :exports code :eval no-export
   dagger call alpine-python-user-venv --pip-packages=requests with-exec --args="python3","-c","import requests; print(requests.__name__)" stdout
   #+end_src
 
-  #+RESULTS[933c89d76ea5c0943a8114d1eb9942e75f3af66e]:
+  #+RESULTS[1c3478a0450335a1b127fef0cd0570a05fe3692b]:
   : requests
   :end:
 

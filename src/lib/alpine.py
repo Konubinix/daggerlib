@@ -44,10 +44,11 @@ def alpine_user(
     self,
     distro_packages: list[str] = (),
     groups: list[str] = (),
+    uid: int = 1000,
 ) -> dagger.Container:
     """Alpine with a default user."""
     ctr = self.alpine(distro_packages=distro_packages)
-    return self.use_user(ctr, groups=groups)
+    return self.use_user(ctr, uid=uid, groups=groups)
 
 
 # A non-root user for safer workflows:1 ends here

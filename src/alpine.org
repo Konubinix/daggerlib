@@ -98,13 +98,13 @@ chain:
   - stdout
   #+end_src
 
-  #+RESULTS[4cd8426869dd414aedd75362cd94eb25dfa1466c]: alpine_distro_packages
+  #+RESULTS[08aa47b91718715981668a455eda0715fdaf77db]: alpine_distro_packages
   :results:
   #+begin_src bash :exports code :eval no-export
   dagger call alpine --distro-packages=curl with-exec --args="which","curl" stdout
   #+end_src
 
-  #+RESULTS[1e58f619f899b7a0230caf874bc01d3c559d7f55]:
+  #+RESULTS[200c50ddd922bfbca5025152685fe86be635771f]:
   : /usr/bin/curl
   :end:
 
@@ -122,10 +122,11 @@ chain:
       self,
       distro_packages: list[str] = (),
       groups: list[str] = (),
+      uid: int = 1000,
   ) -> dagger.Container:
       """Alpine with a default user."""
       ctr = self.alpine(distro_packages=distro_packages)
-      return self.use_user(ctr, groups=groups)
+      return self.use_user(ctr, uid=uid, groups=groups)
   #+end_src
 
   #+NAME: alpine_user_check
@@ -144,6 +145,26 @@ chain:
 
   #+RESULTS[b11dd3ac761d5ca466b7f65120a379da8603ae4c]:
   : uid=1000(sam) gid=1000(sam) groups=1000(sam),1000(sam)
+  :end:
+
+  #+NAME: alpine_user_uid
+  #+begin_src fixtureyaml
+func: alpine-user
+args:
+  uid: 2000
+chain:
+  - with-exec: [id, -u]
+  - stdout
+  #+end_src
+
+  #+RESULTS[f8c927f7a7f73bedd2e30ee927d565a94fb60950]: alpine_user_uid
+  :results:
+  #+begin_src bash :exports code :eval no-export
+  dagger call alpine-user --uid=2000 with-exec --args="id","-u" stdout
+  #+end_src
+
+  #+RESULTS[c6489384c3e197763e06bc15ff62c070c2c11394]:
+  : 2000
   :end:
 
 * Timezone artifacts for other containers

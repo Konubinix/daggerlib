@@ -133,13 +133,13 @@ chain:
   - stdout
   #+end_src
 
-  #+RESULTS[b5ab50055265f8a19c73bf77469aa9f25dd92ce8]: debian_distro_packages
+  #+RESULTS[c4ca8b6d3f2313336e7f7243c8ba185272f9292a]: debian_distro_packages
   :results:
   #+begin_src bash :exports code :eval no-export
   dagger call debian --distro-packages=curl with-exec --args="which","curl" stdout
   #+end_src
 
-  #+RESULTS[ab9b840841d8dba1ff2e90f87fb46a68849c6b3a]:
+  #+RESULTS[6eb3d18518d65c1bff16ba19f04aad31431ff685]:
   : /usr/bin/curl
   :end:
 

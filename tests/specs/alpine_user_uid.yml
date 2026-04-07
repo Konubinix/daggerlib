@@ -1,0 +1,6 @@
+func: alpine-user
+args:
+  uid: 2000
+chain:
+  - with-exec: [id, -u]
+  - stdout

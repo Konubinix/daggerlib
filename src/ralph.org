@@ -373,13 +373,13 @@ chain:
   - stdout
   #+end_src
 
-  #+RESULTS[b63eaf17944fab7eebf8678cf2d16c197d921765]: ralph_yml_valid
+  #+RESULTS[262bcf831e0a967619ecc4e40c62ffb619ff1319]: ralph_yml_valid
   :results:
   #+begin_src bash :exports code :eval no-export
   dagger call debian --distro-packages=python3-yaml with-file --path=/tmp/ralph.yml --source="${ROOT}/src/ralph.yml" with-exec --args="python3","-c","import yaml; d=yaml.safe_load(open('/tmp/ralph.yml')); print(d['event_loop']['starting_event']); print(len(d['hats']))" stdout
   #+end_src
 
-  #+RESULTS[8f3b1dcf87e5e221ea3d68d9781e03f6d8d12e96]:
+  #+RESULTS[75a8ecbfcf258bc28782db45878319966b98b992]:
   : work.start
   : 2
   :end:
