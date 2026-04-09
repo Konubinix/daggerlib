@@ -7,6 +7,10 @@ Use those scripts only:
 Use ./tangle-nodagger.sh ONLY IF you need to resolve the chicken-and-egg
 problem.
 
+If the tooling does not work. Focus on fixing it. The tooling must be helpful
+and help me when something goes wrong. If the tooling does not help, improve the
+tooling, don't workaround.
+
 Don't piss code. Always plan.
 
 Follow the zen of python:
