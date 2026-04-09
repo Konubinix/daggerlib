@@ -1,5 +1,6 @@
 Use those scripts only:
 - ./run.sh
+- ./yamldagger.sh
 - ./tangle.sh
 - ./test.sh
 
@@ -40,3 +41,19 @@ Explicitly providing --source=. is an antipattern. Use DefaultPath instead.
 
 Always start by running tests to have a baseline. Never try to add a feature if
 the baseline is not totally green.
+
+Never edit claude's memory.
+
+Put stuff in CLAUDE.md ONLY IF the stuff makes sense for claude only. Most
+of the time, the information will benefit a human reader and must be put in an
+org file.
+
+When things start drifting from our plan, don't take initiatives, propose a new
+plan.
+
+Fundamental rules of examples to never break:
+1. ALL the example will be constructed from the readme.org, either by running a
+   block or by tangling,
+2. the commands shown in the example show EXACTLY what a user would use in a
+   real life project (yet, we may wrap the command to ease mocking, taking
+   shortcuts)
