@@ -63,7 +63,7 @@ class ProductionImages:
   the extraction produces the expected files:
 
   #+NAME: tz_artifacts
-  #+begin_src bash :tangle (daggerlib-tangle-test "tz_artifacts") :dir (locate-dominating-file default-directory ".git") :comments no :padline no
+  #+begin_src bash :tangle (daggerlib-tangle-test "tz_artifacts") :comments no :padline no
   TMP="${TMP:-$(mktemp -d)}"
   dagger call alpine-tz export --path="$TMP/out" > /dev/null
   ls "$TMP/out" | sort
@@ -97,8 +97,7 @@ class ProductionImages:
   #+end_src
 
   #+NAME: distroless_service
-  #+begin_src bash :tangle (daggerlib-tangle-test "distroless_service") :dir (locate-dominating-file default-directory ".git") :comments no :padline no
-  cd examples/production_images
+  #+begin_src bash :tangle (daggerlib-tangle-test "distroless_service") :comments no :padline no
   dagger call run-distroless
   #+end_src
 
@@ -117,7 +116,7 @@ class ProductionImages:
   file is present so timestamps will be correct:
 
   #+NAME: distroless_static
-  #+begin_src bash :tangle (daggerlib-tangle-test "distroless_static") :dir (locate-dominating-file default-directory ".git") :comments no :padline no
+  #+begin_src bash :tangle (daggerlib-tangle-test "distroless_static") :comments no :padline no
   TMP="${TMP:-$(mktemp -d)}"
   dagger call distroless-debian file --path="/etc/localtime" export --path="$TMP/out2/localtime" > /dev/null
   test -s "$TMP/out2/localtime" && echo "non-empty"

@@ -63,8 +63,7 @@ class NonRootUser:
   #+end_src
 
   #+NAME: alpine_user_whoami
-  #+begin_src bash :tangle (daggerlib-tangle-test "alpine_user_whoami") :dir (locate-dominating-file default-directory ".git") :comments no :padline no
-  cd examples/non_root_user
+  #+begin_src bash :tangle (daggerlib-tangle-test "alpine_user_whoami") :comments no :padline no
   dagger call whoami-check
   #+end_src
 
@@ -94,8 +93,7 @@ class NonRootUser:
   #+end_src
 
   #+NAME: alpine_user_home
-  #+begin_src bash :tangle (daggerlib-tangle-test "alpine_user_home") :dir (locate-dominating-file default-directory ".git") :comments no :padline no
-  cd examples/non_root_user
+  #+begin_src bash :tangle (daggerlib-tangle-test "alpine_user_home") :comments no :padline no
   dagger call home-check
   #+end_src
 
@@ -125,8 +123,7 @@ class NonRootUser:
   #+end_src
 
   #+NAME: alpine_user_id
-  #+begin_src bash :tangle (daggerlib-tangle-test "alpine_user_id") :dir (locate-dominating-file default-directory ".git") :comments no :padline no
-  cd examples/non_root_user
+  #+begin_src bash :tangle (daggerlib-tangle-test "alpine_user_id") :comments no :padline no
   dagger call uid-check
   #+end_src
 
@@ -155,8 +152,7 @@ class NonRootUser:
   #+end_src
 
   #+NAME: debian_user_id
-  #+begin_src bash :tangle (daggerlib-tangle-test "debian_user_id") :dir (locate-dominating-file default-directory ".git") :comments no :padline no
-  cd examples/non_root_user
+  #+begin_src bash :tangle (daggerlib-tangle-test "debian_user_id") :comments no :padline no
   dagger call debian-uid-check
   #+end_src
 

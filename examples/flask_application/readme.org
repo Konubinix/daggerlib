@@ -83,8 +83,7 @@ class FlaskApplication:
   #+end_src
 
   #+NAME: flask_app_loads
-  #+begin_src bash :tangle (daggerlib-tangle-test "flask_app_loads") :dir (locate-dominating-file default-directory ".git") :comments no :padline no
-  cd examples/flask_application
+  #+begin_src bash :tangle (daggerlib-tangle-test "flask_app_loads") :comments no :padline no
   dagger call flask-routes
   #+end_src
 
@@ -116,8 +115,7 @@ class FlaskApplication:
   #+end_src
 
   #+NAME: flask_gunicorn_check
-  #+begin_src bash :tangle (daggerlib-tangle-test "flask_gunicorn_check") :dir (locate-dominating-file default-directory ".git") :comments no :padline no
-  cd examples/flask_application
+  #+begin_src bash :tangle (daggerlib-tangle-test "flask_gunicorn_check") :comments no :padline no
   dagger call gunicorn-check
   #+end_src
 

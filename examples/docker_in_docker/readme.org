@@ -77,8 +77,7 @@ class DockerInDocker:
   #+end_src
 
   #+NAME: dind_test_kind
-  #+begin_src bash :tangle (daggerlib-tangle-test "dind_test_kind") :dir (locate-dominating-file default-directory ".git") :comments no :padline no
-  cd examples/docker_in_docker
+  #+begin_src bash :tangle (daggerlib-tangle-test "dind_test_kind") :comments no :padline no
   dagger call test-kind
   #+end_src
 

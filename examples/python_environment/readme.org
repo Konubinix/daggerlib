@@ -92,8 +92,7 @@ class PythonEnvironment:
   #+end_src
 
   #+NAME: python_transform
-  #+begin_src bash :tangle (daggerlib-tangle-test "python_transform") :dir (locate-dominating-file default-directory ".git") :comments no :padline no
-  cd examples/python_environment
+  #+begin_src bash :tangle (daggerlib-tangle-test "python_transform") :comments no :padline no
   dagger call transform
   #+end_src
 
@@ -124,8 +123,7 @@ class PythonEnvironment:
   #+end_src
 
   #+NAME: venv_with_packages
-  #+begin_src bash :tangle (daggerlib-tangle-test "venv_with_packages") :dir (locate-dominating-file default-directory ".git") :comments no :padline no
-  cd examples/python_environment
+  #+begin_src bash :tangle (daggerlib-tangle-test "venv_with_packages") :comments no :padline no
   dagger call check-requests
   #+end_src
 
@@ -157,8 +155,7 @@ class PythonEnvironment:
   #+end_src
 
   #+NAME: debian_transform
-  #+begin_src bash :tangle (daggerlib-tangle-test "debian_transform") :dir (locate-dominating-file default-directory ".git") :comments no :padline no
-  cd examples/python_environment
+  #+begin_src bash :tangle (daggerlib-tangle-test "debian_transform") :comments no :padline no
   dagger call transform-debian
   #+end_src
 
@@ -197,8 +194,7 @@ requests
   #+end_src
 
   #+NAME: pip_compile
-  #+begin_src bash :tangle (daggerlib-tangle-test "pip_compile") :dir (locate-dominating-file default-directory ".git") :comments no :padline no
-  cd examples/python_environment
+  #+begin_src bash :tangle (daggerlib-tangle-test "pip_compile") :comments no :padline no
   dagger call pip-lock
   #+end_src
 
