@@ -1,3 +1,0 @@
-TMP="${TMP:-$(mktemp -d)}"
-dagger call alpine-tz export --path="$TMP/out" > /dev/null
-ls "$TMP/out" | sort

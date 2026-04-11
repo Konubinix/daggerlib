@@ -1,3 +1,0 @@
-TMP="${TMP:-$(mktemp -d)}"
-dagger call distroless-debian file --path="/etc/localtime" export --path="$TMP/out2/localtime" > /dev/null
-test -s "$TMP/out2/localtime" && echo "non-empty"

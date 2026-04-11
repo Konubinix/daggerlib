@@ -66,6 +66,10 @@ each one, and compares stdout to the expected output.
   expected output file in =tests/expected/=.  The test runner runs
   each command with bash and compares stdout to the expected output.
 
+  Library tests (under =tests/commands/=) run from the project root.
+  Example tests (under =examples/*/tests/commands/=) run from the
+  example directory so that =dagger call= loads the example module.
+
   #+begin_src python :tangle test_sdk.py
   import os
   import subprocess
@@ -74,28 +78,55 @@ each one, and compares stdout to the expected output.
   import pytest
 
   ROOT = Path(__file__).resolve().parents[1]
-  COMMANDS_DIR = Path(__file__).parent / "commands"
-  EXPECTED_DIR = Path(__file__).parent / "expected"
-  command_files = sorted(COMMANDS_DIR.glob("*")) if COMMANDS_DIR.exists() else []
+  TESTS_DIR = Path(__file__).parent
+
+
+  def _collect(commands_dir, cwd):
+      """Collect (cmd_file, expected_dir, cwd) triples from a commands dir."""
+      if not commands_dir.exists():
+          return []
+      expected_dir = commands_dir.parent / "expected"
+      return [
+          (f, expected_dir, cwd)
+          for f in sorted(commands_dir.glob("*"))
+      ]
+
+
+  def _test_id(entry):
+      cmd_file, _, cwd = entry
+      if cwd == ROOT:
+          return cmd_file.name
+      return f"{cwd.name}/{cmd_file.name}"
+
+
+  lib_tests = _collect(TESTS_DIR / "commands", ROOT)
+  example_tests = [
+      entry
+      for example_dir in sorted(ROOT.glob("examples/*"))
+      for entry in _collect(example_dir / "tests" / "commands", example_dir)
+  ]
+  all_tests = lib_tests + example_tests
 
 
   @pytest.mark.parametrize(
-      "cmd_file", command_files, ids=[f.name for f in command_files],
+      "cmd_file,expected_dir,cwd",
+      all_tests,
+      ids=[_test_id(e) for e in all_tests],
   )
-  def test_command(tmp_path, cmd_file):
+  def test_command(tmp_path, cmd_file, expected_dir, cwd):
       env = {**os.environ, "TMP": str(tmp_path), "ROOT": str(ROOT)}
       env["PATH"] = str(ROOT / "tests") + ":" + env.get("PATH", "")
       result = subprocess.run(
           ["bash", str(cmd_file)],
           capture_output=True,
           text=True,
-          cwd=str(ROOT),
+          cwd=str(cwd),
           env=env,
       )
       assert result.returncode == 0, (
           f"command {cmd_file.name} failed (exit {result.returncode}):\n{result.stderr}"
       )
-      expected_file = EXPECTED_DIR / cmd_file.name
+      expected_file = expected_dir / cmd_file.name
       expected = expected_file.read_text().rstrip("\n") if expected_file.exists() else ""
       assert result.stdout.rstrip("\n") == expected, (
           f"{cmd_file.name}: got {result.stdout.rstrip(chr(10))!r},"

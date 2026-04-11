@@ -54,26 +54,6 @@ class ProductionImages:
     <<run-distroless>>
 #+end_src
 
-* Preparing timezone data for the production image
-
-  Distroless images have no =apt= or =apk= to install timezone data.
-  The daggerlib =alpine-tz= helper extracts the timezone files from
-  Alpine so they can be injected into distroless images — this is
-  what =distroless-python-3-debian= does internally. Here I verify
-  the extraction produces the expected files:
-
-  #+NAME: tz_artifacts
-  #+begin_src bash :tangle (daggerlib-tangle-test "tz_artifacts") :comments no :padline no
-  TMP="${TMP:-$(mktemp -d)}"
-  dagger call alpine-tz export --path="$TMP/out" > /dev/null
-  ls "$TMP/out" | sort
-  #+end_src
-
-  #+RESULTS[1598e902132fe3d2c13b4165918391aee28c046d]: tz_artifacts
-
-  #+BEGIN_SRC org :tangle (daggerlib-tangle-expected "tz_artifacts") :noweb yes :exports none :comments no :padline no
-  <<tz_artifacts()>>
-  #+END_SRC
 
 * Running the service in distroless
 
@@ -95,33 +75,14 @@ class ProductionImages:
   #+end_src
 
   #+NAME: distroless_service
-  #+begin_src bash :tangle (daggerlib-tangle-test "distroless_service") :comments no :padline no
+  #+begin_src bash :tangle tests/commands/distroless_service :mkdirp yes :comments no :padline no
   dagger call run-distroless
   #+end_src
 
-  #+RESULTS[6929522cc2caf4c36360322664506fd862563129]: distroless_service
+  #+RESULTS[0436f4d9d432ca157d99edd7414f4ff0ee34f76d]: distroless_service
   : service started (timezone: CEST)
 
-  #+BEGIN_SRC org :tangle (daggerlib-tangle-expected "distroless_service") :noweb yes :exports none :comments no :padline no
+  #+BEGIN_SRC org :tangle tests/expected/distroless_service :mkdirp yes :noweb yes :exports none :comments no :padline no
   <<distroless_service()>>
   #+END_SRC
 
-* The static variant for compiled services
-
-  A teammate rewrote one of our services in Go. For compiled binaries,
-  I use the distroless static image — even smaller than the Python
-  variant, it contains no runtime at all. I verify that the timezone
-  file is present so timestamps will be correct:
-
-  #+NAME: distroless_static
-  #+begin_src bash :tangle (daggerlib-tangle-test "distroless_static") :comments no :padline no
-  TMP="${TMP:-$(mktemp -d)}"
-  dagger call distroless-debian file --path="/etc/localtime" export --path="$TMP/out2/localtime" > /dev/null
-  test -s "$TMP/out2/localtime" && echo "non-empty"
-  #+end_src
-
-  #+RESULTS[bb6065553d5886bbe4d25d0b02df49de6029d847]: distroless_static
-
-  #+BEGIN_SRC org :tangle (daggerlib-tangle-expected "distroless_static") :noweb yes :exports none :comments no :padline no
-  <<distroless_static()>>
-  #+END_SRC

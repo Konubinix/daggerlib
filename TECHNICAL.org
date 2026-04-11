@@ -216,12 +216,18 @@ programming setup, tangling pipeline, and editor configuration. See
   identically whether tangled from the command line or interactively.
 
   The =daggerlib-tangle-test= helper returns the tangle path for
-  test command files.  Each =dagger call= bash block tangles to
-  =tests/commands/<name>=.  =run.sh= executes the bash blocks and
-  populates =#+RESULTS:=.  Tangling then writes those results to
-  =tests/expected/= via noweb references.  The test runner simply
-  iterates over command files, runs each one, and compares stdout
-  to the expected output.
+  library test command files.  Each =dagger call= bash block in the
+  =src/*.org= files tangles to =tests/commands/<name>=.  =run.sh=
+  executes the bash blocks and populates =#+RESULTS:=.  Tangling
+  then writes those results to =tests/expected/= via noweb
+  references.  The test runner iterates over command files, runs
+  each one, and compares stdout to the expected output.
+
+  Example org files (=examples/*/readme.org=) tangle their tests
+  into the example's own =tests/commands/= and =tests/expected/=
+  directories using relative paths with =:mkdirp yes=.  The test
+  runner discovers these and runs them with =cwd= set to the
+  example directory so =dagger call= loads the example module.
 
   #+begin_src emacs-lisp :tangle reproducibility-helpers.el
   ;;; reproducibility-helpers.el --- Tangle helpers for test commands
