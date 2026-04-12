@@ -3,7 +3,10 @@
     "allow": [
       "Bash(./tangle.sh)",
       "Bash(./test.sh -v)",
-      "Bash(./run.sh --no-cache)"
+      "Bash(./run.sh --no-cache)",
+      "Bash(./init-examples.sh --from-scratch)",
+      "Bash(./test.sh -v -x)",
+      "Bash(./test.sh -v -k *)"
     ]
   }
 }
