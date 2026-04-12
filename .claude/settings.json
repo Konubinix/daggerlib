@@ -1,12 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(./tangle.sh)",
-      "Bash(./test.sh -v)",
-      "Bash(./run.sh --no-cache)",
-      "Bash(./init-examples.sh --from-scratch)",
-      "Bash(./test.sh -v -x)",
-      "Bash(./test.sh -v -k *)"
+      "Bash(./tangle.sh *)",
+      "Bash(./init-examples.sh *)",
+      "Bash(./run.sh *)",
+      "Bash(./test.sh *)"
     ]
   }
 }
