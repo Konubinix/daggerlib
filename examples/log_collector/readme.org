@@ -1,0 +1,176 @@
+:PROPERTIES:
+:ID:       a7860d82-cd81-480f-b3c2-355e67ddf2f5
+:END:
+#+TITLE: Packaging a log collector CLI
+#+LANGUAGE: en
+#+PROPERTY: header-args:bash :tangle no :results verbatim :cache yes
+
+I have a small log collector CLI and I want to package it for
+different environments. Some teams run Alpine, some run Debian, and
+the security team insists on distroless for anything facing the
+internet. The script is the same everywhere — only the base image
+changes.
+
+Here is my collector — it scans a directory for =.log= files and
+prints a JSON summary:
+
+#+begin_src python :tangle collector.py
+"""Scan a directory for .log files and print a JSON summary."""
+import json
+import sys
+from pathlib import Path
+
+log_dir = Path(sys.argv[1])
+summary = [
+    {"file": p.name, "lines": len(p.read_text().splitlines())}
+    for p in sorted(log_dir.glob("*.log"))
+]
+print(json.dumps(summary))
+#+end_src
+
+And some sample log files to test with:
+
+#+begin_src bash :tangle logs/app.log :shebang "" :eval no-export :comments no :padline no :mkdirp yes
+2026-04-01 INFO  application started
+2026-04-01 INFO  listening on port 8080
+2026-04-01 INFO  ready
+#+end_src
+
+#+RESULTS[276cb87b54769f6173c358adbc44e8c589b69252]:
+
+#+begin_src bash :tangle logs/error.log :shebang "" :eval no-export :comments no :padline no :mkdirp yes
+2026-04-01 ERROR connection refused
+2026-04-01 ERROR retry failed
+#+end_src
+
+#+RESULTS[67bb758c315c8bf1109bf0c2aa7a26758ff318e0]:
+
+First I set up my Dagger project and install daggerlib:
+
+#+begin_src bash :eval no-export :init yes
+dagger init --sdk=python
+dagger install github.com/Konubinix/daggerlib
+#+end_src
+
+#+RESULTS:
+: Initialized module log_collector in /work/examples/log_collector
+
+The following is only for testing purposes — it makes the project
+use the local daggerlib checkout instead of the published version:
+
+#+begin_src bash :eval no-export :init yes
+sed -i '/pin/d; s|"github.com/Konubinix/daggerlib@main"|"../.."|; s|"\.\./\.\.",|"../.."|' dagger.json
+#+end_src
+
+#+RESULTS:
+
+Then I write my Dagger module. Each =<<...>>= reference is defined in
+the sections below:
+
+#+begin_src python :tangle .dagger/src/log_collector/main.py :noweb yes
+from typing import Annotated
+
+import dagger
+from dagger import DefaultPath, dag, function, object_type
+
+
+@object_type
+class LogCollector:
+    <<collect-on-alpine>>
+    <<collect-on-debian>>
+    <<collect-on-distroless>>
+#+end_src
+
+
+* Collecting on Alpine
+
+  Alpine is the go-to lightweight base. I inject my script and log
+  files, then run the collector:
+
+  #+NAME: collect-on-alpine
+  #+begin_src python
+  @function
+  async def collect_on_alpine(self, src: Annotated[dagger.Directory, DefaultPath(".")]) -> str:
+      """Run the log collector on Alpine."""
+      return await (
+          dag.lib().alpine_python_user_venv()
+          .with_file('/app/collector.py', src.file('collector.py'))
+          .with_directory('/app/logs', src.directory('logs'))
+          .with_exec(['python3', 'collector.py', 'logs'])
+          .stdout()
+      )
+  #+end_src
+
+  #+NAME: collect_on_alpine
+  #+begin_src bash :tangle tests/commands/collect_on_alpine :mkdirp yes :comments no :padline no
+  dagger call collect-on-alpine
+  #+end_src
+
+  #+RESULTS[d88a05e43641c9cb628e964d328f220f2e397e1e]: collect_on_alpine
+  : [{"file": "app.log", "lines": 3}, {"file": "error.log", "lines": 2}]
+
+  #+BEGIN_SRC org :tangle tests/expected/collect_on_alpine :mkdirp yes :noweb yes :exports none :comments no :padline no
+  <<collect_on_alpine()>>
+  #+END_SRC
+
+* Collecting on Debian
+
+  Some dependencies need native libraries that are easier to get on
+  Debian. Same script, different base:
+
+  #+NAME: collect-on-debian
+  #+begin_src python
+  @function
+  async def collect_on_debian(self, src: Annotated[dagger.Directory, DefaultPath(".")]) -> str:
+      """Run the log collector on Debian."""
+      return await (
+          dag.lib().debian_python_user_venv()
+          .with_file('/app/collector.py', src.file('collector.py'))
+          .with_directory('/app/logs', src.directory('logs'))
+          .with_exec(['python3', 'collector.py', 'logs'])
+          .stdout()
+      )
+  #+end_src
+
+  #+NAME: collect_on_debian
+  #+begin_src bash :tangle tests/commands/collect_on_debian :mkdirp yes :comments no :padline no
+  dagger call collect-on-debian
+  #+end_src
+
+  #+RESULTS[e26f5ff634c186c925d13027567dfd758dacfd78]: collect_on_debian
+  : [{"file": "app.log", "lines": 3}, {"file": "error.log", "lines": 2}]
+
+  #+BEGIN_SRC org :tangle tests/expected/collect_on_debian :mkdirp yes :noweb yes :exports none :comments no :padline no
+  <<collect_on_debian()>>
+  #+END_SRC
+
+* Collecting on distroless
+
+  Distroless has no shell and no package manager — only the Python
+  interpreter. I use absolute paths and call Python directly:
+
+  #+NAME: collect-on-distroless
+  #+begin_src python
+  @function
+  async def collect_on_distroless(self, src: Annotated[dagger.Directory, DefaultPath(".")]) -> str:
+      """Run the log collector on distroless."""
+      return await (
+          dag.lib().distroless_python3_debian()
+          .with_file('/app/collector.py', src.file('collector.py'))
+          .with_directory('/app/logs', src.directory('logs'))
+          .with_exec(['python3', '/app/collector.py', '/app/logs'])
+          .stdout()
+      )
+  #+end_src
+
+  #+NAME: collect_on_distroless
+  #+begin_src bash :tangle tests/commands/collect_on_distroless :mkdirp yes :comments no :padline no
+  dagger call collect-on-distroless
+  #+end_src
+
+  #+RESULTS[f471a186d9835111a45503df5fd869ee17b0cfaa]: collect_on_distroless
+  : [{"file": "app.log", "lines": 3}, {"file": "error.log", "lines": 2}]
+
+  #+BEGIN_SRC org :tangle tests/expected/collect_on_distroless :mkdirp yes :noweb yes :exports none :comments no :padline no
+  <<collect_on_distroless()>>
+  #+END_SRC

@@ -50,7 +50,7 @@ that builds on top of Dagger.
   yourself.
 
   - [[file:examples/webhook_receiver/readme.org][Shipping a webhook receiver]] — Flask app, gunicorn, container packaging
-  - [[file:examples/base_containers/readme.org][Packaging a log collector CLI]] — Alpine, Debian, distroless
+  - [[file:examples/log_collector/readme.org][Packaging a log collector CLI]] — Alpine, Debian, distroless
   - [[file:examples/data_pipeline/readme.org][Building a data pipeline CLI]] — virtualenvs, pip-tools, CSV transform
   - [[file:examples/production_service/readme.org][Shipping a Python service to production]] — distroless, timezone injection
   - [[file:examples/container_testing/readme.org][Testing a container orchestrator]] — Docker-in-Docker
