@@ -135,6 +135,28 @@ programming setup, tangling pipeline, and editor configuration. See
       ralph = ralph
   #+end_src
 
+* Module context
+
+  The =.daggerignore= keeps volatile or large files out of the Dagger
+  module context. Without it, the 230 MB =.tangle-deps/= directory
+  (fetched by the tangling pipeline) would be sent as part of the
+  module source on every =dagger call=, invalidating the cache whenever
+  it changes.
+
+  Note that =.tangle-deps/= is always mounted as a cache volume inside
+  the container (see [[file:src/dind.org][dind.org]]), so excluding it from the module
+  context loses nothing.
+
+  #+begin_src text :tangle .daggerignore :comments no
+  .git
+  .pytest_cache
+  .ruff_cache
+  .claude
+  CLAUDE.md
+  .tangle-deps
+  __pycache__
+  #+end_src
+
 * Editor configuration
   :PROPERTIES:
   :ID:       d36cf7bf-faac-46a9-9150-4031c8f06ca6

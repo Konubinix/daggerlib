@@ -1,0 +1,7 @@
+.git
+.pytest_cache
+.ruff_cache
+.claude
+CLAUDE.md
+.tangle-deps
+__pycache__
