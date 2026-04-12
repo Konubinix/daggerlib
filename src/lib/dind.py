@@ -312,6 +312,8 @@ def dind_run_org(
 def dind_init_examples(
     self,
     src: dagger.Directory | None = None,
+    from_scratch: bool = False,
+    no_cache: bool = False,
 ) -> dagger.Directory:
     """Init example modules inside a DinD container and return only the modified files."""
     if src is None:
@@ -324,9 +326,12 @@ def dind_init_examples(
         .with_mounted_cache("/var/lib/docker", dag.cache_volume("dind-docker"))
     )
     before = ctr.directory("/work")
-    after = self.dind_with_docker(cmd="./init-examples-host.sh", ctr=ctr).directory(
-        "/work"
-    )
+    cmd = "./init-examples-host.sh"
+    if from_scratch:
+        cmd += " --from-scratch"
+    elif no_cache:
+        cmd += " --no-cache"
+    after = self.dind_with_docker(cmd=cmd, ctr=ctr).directory("/work")
     return before.diff(after)
 
 

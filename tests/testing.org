@@ -43,7 +43,12 @@ each one, and compares stdout to the expected output.
   #+begin_src bash :tangle ../test.sh :shebang "#!/usr/bin/env bash"
   set -eu
   cd "$(dirname "$0")"
-  exec pytest tests/test_sdk.py -v
+  for arg in "$@"; do
+      if [ "$arg" = "-v" ]; then
+          export DAGGER_VERBOSE=1
+      fi
+  done
+  exec pytest tests/test_sdk.py "$@"
   #+end_src
 
 * Docker-in-Docker test entry point
@@ -124,7 +129,9 @@ each one, and compares stdout to the expected output.
           env=env,
       )
       assert result.returncode == 0, (
-          f"command {cmd_file.name} failed (exit {result.returncode}):\n{result.stderr}"
+          f"command {cmd_file.name} failed (exit {result.returncode}):\n"
+          f"--- stdout ---\n{result.stdout}\n"
+          f"--- stderr ---\n{result.stderr}"
       )
       expected_file = expected_dir / cmd_file.name
       expected = expected_file.read_text().rstrip("\n") if expected_file.exists() else ""
@@ -144,10 +151,18 @@ each one, and compares stdout to the expected output.
   finds the real =dagger= binary, sets =DARK=1= to skip the terminal
   background query, and redirects stderr to suppress progress output.
 
+  When =DAGGER_VERBOSE=1= (set by =test.sh -v=), the wrapper uses
+  =--progress=plain= instead and preserves stderr so test failures
+  are diagnosable.
+
   #+begin_src bash :tangle dagger :shebang "#!/usr/bin/env bash"
     export DAGGER_NO_NAG=1
     export DARK=1
     DAGGER_PATH="$(which -a dagger|grep -v /tests/|head -1)"
     args=("$@")
-    exec "$DAGGER_PATH" --silent "${args[@]}" 2>/dev/null
+    if [ "${DAGGER_VERBOSE:-}" = "1" ]; then
+        exec "$DAGGER_PATH" --progress=plain --silent "${args[@]}"
+    else
+        exec "$DAGGER_PATH" --silent "${args[@]}" 2>/dev/null
+    fi
   #+end_src

@@ -49,7 +49,9 @@ def test_command(tmp_path, cmd_file, expected_dir, cwd):
         env=env,
     )
     assert result.returncode == 0, (
-        f"command {cmd_file.name} failed (exit {result.returncode}):\n{result.stderr}"
+        f"command {cmd_file.name} failed (exit {result.returncode}):\n"
+        f"--- stdout ---\n{result.stdout}\n"
+        f"--- stderr ---\n{result.stderr}"
     )
     expected_file = expected_dir / cmd_file.name
     expected = expected_file.read_text().rstrip("\n") if expected_file.exists() else ""

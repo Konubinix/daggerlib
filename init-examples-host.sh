@@ -57,6 +57,8 @@ fi
 
 init_file() {
     local orgfile="$1"
+    local example_dir
+    example_dir="$(dirname "$orgfile")"
     echo "Init $orgfile..."
     local raw_output rc=0 no_cache_arg=""
     if [ -n "$NO_CACHE" ]; then
@@ -70,6 +72,22 @@ init_file() {
         echo "ERROR: init failed (exit $rc):" >&2
         echo "$raw_output" >&2
         return "$rc"
+    fi
+    local djson="$example_dir/dagger.json"
+    if [ -f "$djson" ]; then
+        local dir_name
+        dir_name="$(basename "$example_dir")"
+        python3 -c "
+import json, sys
+p, want = sys.argv[1], sys.argv[2]
+d = json.load(open(p))
+if d.get('name') != want:
+    print(f'Setting module name to {want!r} in {p}')
+    d.pop('name', None)
+    d = {'name': want, **d}
+    json.dump(d, open(p, 'w'), indent=2)
+    print()
+" "$djson" "$dir_name"
     fi
 }
 

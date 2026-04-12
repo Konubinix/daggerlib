@@ -6,7 +6,8 @@
 When NO-CACHE is non-nil, ignore cached results."
       (find-file orgfile)
       (org-babel-map-src-blocks nil
-        (when (string= lang "bash")
+        (when (and (string= lang "bash")
+                   (not (assq :init (nth 2 (org-babel-get-src-block-info t)))))
           (message "%s Executing %s %s..." (format-time-string "%H:%M:%S") lang
                    (or (org-element-property :name (org-element-at-point)) "(unnamed)"))
           (if no-cache
