@@ -15,6 +15,10 @@ After editing org files, always run the full pipeline:
 3. ./tangle.sh (again — run.sh may create directories that tangle needs)
 4. ./test.sh
 
+If ./tangle.sh fails because the module can't load (e.g. syntax error
+in tangled Python after editing org), use ./tangle-host.sh to tangle
+locally and break the chicken-and-egg cycle. Then resume with ./tangle.sh.
+
 When creating a new example, add ./init-examples.sh before step 1
 to bootstrap the dagger project (runs :init yes blocks).
 
