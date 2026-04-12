@@ -381,6 +381,24 @@ apt-get install --yes docker-ce docker-ce-cli containerd.io
        return before.diff(after)
    #+end_src
 
+** Exporting org files to HTML
+
+   Exports org files to HTML for GitHub Pages.  Uses the lightweight
+   =emacs_container= (no Docker needed) and returns the =_site/=
+   directory containing the HTML output.
+
+   #+begin_src python
+   @function
+   def export_html(
+       self,
+       src: dagger.Directory | None = None,
+   ) -> dagger.Directory:
+       """Export org files to HTML with noweb expansion for GitHub Pages."""
+       ctr = self.emacs_container(src=src)
+       ctr = ctr.with_mounted_cache("/work/.tangle-deps", dag.cache_volume("tangle-deps"))
+       return ctr.with_exec(["./export-html-host.sh"]).directory("/work/_site")
+   #+end_src
+
   #+NAME: dind_docker_info
   #+begin_src bash :tangle (daggerlib-auto-test) :comments no :padline no
   dagger call dind-with-docker --cmd="docker info --format '{{.OSType}}'" stdout

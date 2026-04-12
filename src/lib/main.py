@@ -30,6 +30,7 @@ from .dind import (
     dind_tangle,
     dind_with_docker,
     emacs_container,
+    export_html,
 )
 from .distroless import distroless_debian, distroless_python3_debian, distroless_set_tz
 from .flask_venv import flask_venv
@@ -100,6 +101,7 @@ class Lib:
     dind_run_org = dind_run_org
     dind_tangle = dind_tangle
     dind_init_examples = dind_init_examples
+    export_html = export_html
 
     # Ralph
     ralph = ralph

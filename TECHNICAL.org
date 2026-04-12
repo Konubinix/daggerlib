@@ -58,6 +58,7 @@ programming setup, tangling pipeline, and editor configuration. See
       dind_tangle,
       dind_with_docker,
       emacs_container,
+      export_html,
   )
   from .distroless import distroless_debian, distroless_python3_debian, distroless_set_tz
   from .flask_venv import flask_venv
@@ -128,6 +129,7 @@ programming setup, tangling pipeline, and editor configuration. See
       dind_run_org = dind_run_org
       dind_tangle = dind_tangle
       dind_init_examples = dind_init_examples
+      export_html = export_html
 
       # Ralph
       ralph = ralph
@@ -713,6 +715,69 @@ Stops at first failure."
   fi
   #+end_src
 
+* Export HTML (host)
+
+  Exports all publishable org files to HTML with noweb expansion.
+  GitHub's org-mode renderer cannot expand noweb references, so we
+  export to HTML via Emacs and publish to GitHub Pages.
+
+  The script reuses =tangle.el= to load the pinned org-mode and
+  configure babel, then exports each file with
+  =org-html-export-to-html=.  File links (=[[file:foo.org]]=) are
+  rewritten to point to =.html= so navigation works in the published
+  site.
+
+  #+begin_src bash :tangle export-html-host.sh :shebang "#!/usr/bin/env bash" :noweb yes
+  # Export org files to HTML for GitHub Pages.
+  set -euo pipefail
+
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+  <<ensure-org>>
+
+  SITE_DIR="$SCRIPT_DIR/_site"
+  rm -rf "$SITE_DIR"
+  mkdir -p "$SITE_DIR"
+
+  export_file() {
+      local orgfile="$1"
+      local relpath
+      relpath="$(realpath --relative-to="$SCRIPT_DIR" "$orgfile")"
+      local outdir="$SITE_DIR/$(dirname "$relpath")"
+      mkdir -p "$outdir"
+      echo "Exporting $relpath..."
+      local rc=0
+      emacs --batch --no-init-file \
+          -l "$SCRIPT_DIR/tangle.el" \
+          --eval "(progn
+                    (require 'ox-html)
+                    (find-file \"$orgfile\")
+                    ;; Rewrite file: links from .org to .html
+                    (setq org-html-link-org-files-as-html t)
+                    (org-html-export-to-html)
+                    (kill-buffer))" 2>&1 || rc=$?
+      if [ "$rc" -ne 0 ]; then
+          echo "ERROR: export failed for $relpath (exit $rc)" >&2
+          return "$rc"
+      fi
+      local htmlfile="${orgfile%.org}.html"
+      if [ -f "$htmlfile" ]; then
+          mv "$htmlfile" "$outdir/"
+      fi
+  }
+
+  for f in "$SCRIPT_DIR"/readme.org "$SCRIPT_DIR"/TECHNICAL.org \
+           "$SCRIPT_DIR"/src/*.org "$SCRIPT_DIR"/tests/*.org \
+           "$SCRIPT_DIR"/examples/*/readme.org; do
+      [ -f "$f" ] && export_file "$f"
+  done
+
+  # Root readme becomes index.html
+  if [ -f "$SITE_DIR/readme.html" ]; then
+      cp "$SITE_DIR/readme.html" "$SITE_DIR/index.html"
+  fi
+  #+end_src
+
 * Containerized wrappers
 
   The daily-use scripts run their host counterparts inside a Dagger
@@ -758,4 +823,12 @@ Stops at first failure."
        shift
    fi
    exec dagger ${DAGGER_EXTRA_ARGS:-} call dind-init-examples $args -o .
+   #+end_src
+
+** export-html.sh
+
+   #+begin_src bash :tangle export-html.sh :shebang "#!/usr/bin/env bash"
+   set -eu
+   cd "$(dirname "$0")"
+   exec dagger ${DAGGER_EXTRA_ARGS:-} call export-html export --path _site
    #+end_src

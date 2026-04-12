@@ -336,3 +336,18 @@ def dind_init_examples(
 
 
 # Initializing examples:1 ends here
+
+
+# [[file:../dind.org::*Exporting org files to HTML][Exporting org files to HTML:1]]
+@function
+def export_html(
+    self,
+    src: dagger.Directory | None = None,
+) -> dagger.Directory:
+    """Export org files to HTML with noweb expansion for GitHub Pages."""
+    ctr = self.emacs_container(src=src)
+    ctr = ctr.with_mounted_cache("/work/.tangle-deps", dag.cache_volume("tangle-deps"))
+    return ctr.with_exec(["./export-html-host.sh"]).directory("/work/_site")
+
+
+# Exporting org files to HTML:1 ends here
