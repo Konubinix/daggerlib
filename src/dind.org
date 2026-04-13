@@ -228,7 +228,7 @@ apt-get install --yes docker-ce docker-ce-cli containerd.io
           include=["src/lib/", "src/ralph.yml", "sdk/", "tests/", "examples/",
                    "dagger.json", ".daggerignore", "pyproject.toml",
                    "test-host.sh"],
-      ).with_new_directory(".git")
+      )
 
       ctr = self.dind_container()
       ctr = (
@@ -248,6 +248,7 @@ apt-get install --yes docker-ce docker-ce-cli containerd.io
           ])
           .with_directory("/work", src)
           .with_workdir("/work")
+          .with_directory("/work/.git", dag.directory())
           .with_mounted_cache("/var/lib/docker", dag.cache_volume("dind-docker"))
       )
       cmd = (
@@ -464,4 +465,3 @@ apt-get install --yes docker-ce docker-ce-cli containerd.io
 
   #+RESULTS[ed3d4f41d5700e5de924ac245559d5a3578e180e]: dind_docker_info
   : linux
-

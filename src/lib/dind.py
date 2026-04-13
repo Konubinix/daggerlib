@@ -122,24 +122,20 @@ class DindMixin:
         ./test-host.sh with dockerd available.
         Source is mounted last so package installs are cached.
         """
-        src = (
-            dag.directory()
-            .with_directory(
-                ".",
-                dag.current_module().source(),
-                include=[
-                    "src/lib/",
-                    "src/ralph.yml",
-                    "sdk/",
-                    "tests/",
-                    "examples/",
-                    "dagger.json",
-                    ".daggerignore",
-                    "pyproject.toml",
-                    "test-host.sh",
-                ],
-            )
-            .with_new_directory(".git")
+        src = dag.directory().with_directory(
+            ".",
+            dag.current_module().source(),
+            include=[
+                "src/lib/",
+                "src/ralph.yml",
+                "sdk/",
+                "tests/",
+                "examples/",
+                "dagger.json",
+                ".daggerignore",
+                "pyproject.toml",
+                "test-host.sh",
+            ],
         )
 
         ctr = self.dind_container()
@@ -173,6 +169,7 @@ class DindMixin:
             )
             .with_directory("/work", src)
             .with_workdir("/work")
+            .with_directory("/work/.git", dag.directory())
             .with_mounted_cache("/var/lib/docker", dag.cache_volume("dind-docker"))
         )
         cmd = (
