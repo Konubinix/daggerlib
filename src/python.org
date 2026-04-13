@@ -1,13 +1,20 @@
 #+TITLE: Python virtualenv helpers
 #+LANGUAGE: en
-#+PROPERTY: header-args:python :tangle lib/python.py
+#+PROPERTY: header-args:python :tangle no
 
 Distro-agnostic helpers for creating Python virtualenvs inside
 containers. Used by both Alpine and Debian container builders.
 
-#+begin_src python
+#+begin_src python :tangle lib/python.py :noweb yes
 import dagger
 from dagger import function
+
+
+class PythonMixin:
+
+    <<python-venv>>
+
+    <<python-user-venv>>
 #+end_src
 
 * Creating a Python venv
@@ -20,6 +27,7 @@ from dagger import function
   =$PATH= so that =python= and =pip= resolve to the venv copies without
   hard-coding the rest of the path.
 
+  #+NAME: python-venv
   #+begin_src python
   @function
   def python_venv(
@@ -46,6 +54,7 @@ from dagger import function
   virtualenv creation. Distro-specific wrappers (=alpine_python_user_venv=,
   =debian_python_user_venv=) call this after building their base container.
 
+  #+NAME: python-user-venv
   #+begin_src python
   @function
   def python_user_venv(

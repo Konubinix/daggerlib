@@ -1,6 +1,6 @@
 #+TITLE: Ralph orchestrator
 #+LANGUAGE: en
-#+PROPERTY: header-args:python :tangle lib/ralph.py
+#+PROPERTY: header-args:python :tangle no
 #+PROPERTY: header-args:bash   :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
 
 Ralph is an automated task orchestrator that uses Claude Code to
@@ -13,11 +13,16 @@ npm packages, git identity, credentials, and patch extraction.
 The caller is responsible for installing their project's own
 dependencies in the container before passing it here.
 
-#+begin_src python
+#+begin_src python :tangle lib/ralph.py :noweb yes
 import shlex
 
 import dagger
 from dagger import dag, function
+
+
+class RalphMixin:
+
+    <<ralph-impl>>
 #+end_src
 
 * Configuration
@@ -178,6 +183,7 @@ from dagger import dag, function
   true
   #+end_src
 
+  #+NAME: ralph-impl
   #+begin_src python
   def _ralph_tooling(
       self,

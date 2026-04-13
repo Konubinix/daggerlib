@@ -3,16 +3,21 @@
 :END:
 #+TITLE: Python dependency management
 #+LANGUAGE: en
-#+PROPERTY: header-args:python :tangle lib/pip_tools.py
+#+PROPERTY: header-args:python :tangle no
 #+PROPERTY: header-args:bash   :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
 
 I manage Python dependencies with =pip-tools= (=pip-compile= and
 =pip-sync=). I need a ready-made container with these tools installed
 and a non-root user.
 
-#+begin_src python
+#+begin_src python :tangle lib/pip_tools.py :noweb yes
 import dagger
 from dagger import dag, function
+
+
+class PipToolsMixin:
+
+    <<pip-tools>>
 #+end_src
 
 * A pip-tools container
@@ -30,6 +35,7 @@ from dagger import dag, function
   exact Python version and =alpine_python()= gives whatever Python
   ships with the Alpine release.
 
+  #+NAME: pip-tools
   #+begin_src python
   @function
   def pip_tools(self) -> dagger.Container:

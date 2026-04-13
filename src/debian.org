@@ -1,6 +1,6 @@
 #+TITLE: Debian-based production containers
 #+LANGUAGE: en
-#+PROPERTY: header-args:python :tangle lib/debian.py
+#+PROPERTY: header-args:python :tangle no
 #+PROPERTY: header-args:bash   :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
 
 Some of my services need libraries or tools that are only well-packaged
@@ -8,11 +8,28 @@ on Debian. I want Debian slim containers with the same defaults as my
 Alpine ones: correct timezone, no unnecessary packages pulled in, and
 easy user setup.
 
-#+begin_src python
+#+begin_src python :tangle lib/debian.py :noweb yes
 import shlex
 
 import dagger
 from dagger import dag, function
+
+
+class DebianMixin:
+
+    <<debian-no-auto-install>>
+
+    <<debian-set-tz>>
+
+    <<debian-apt-cleanup>>
+
+    <<debian>>
+
+    <<debian-user>>
+
+    <<debian-python-user-venv>>
+
+    <<debian-localtime>>
 #+end_src
 
 * Disabling automatic recommends
@@ -20,6 +37,7 @@ from dagger import dag, function
   Debian's apt installs recommended packages by default, which bloats
   images. I disable this globally so every =apt install= stays lean.
 
+  #+NAME: debian-no-auto-install
   #+begin_src python
   @function
   def debian_no_auto_install(self, ctr: dagger.Container) -> dagger.Container:
@@ -37,6 +55,7 @@ from dagger import dag, function
   Debian ships timezone data by default, so it's simpler than Alpine: just
   symlink the right zoneinfo file.
 
+  #+NAME: debian-set-tz
   #+begin_src python
   @function
   def debian_set_tz(self, ctr: dagger.Container) -> dagger.Container:
@@ -52,6 +71,7 @@ from dagger import dag, function
 
   After installing packages, I clean up to keep the image small.
 
+  #+NAME: debian-apt-cleanup
   #+begin_src python
   @function
   def debian_apt_cleanup(self, ctr: dagger.Container) -> dagger.Container:
@@ -67,6 +87,7 @@ from dagger import dag, function
   This is the Debian equivalent of my Alpine target: slim image with
   timezone set, no recommends, and optional extra packages.
 
+  #+NAME: debian
   #+begin_src python
   @function
   def debian(self, distro_packages: list[str] = ()) -> dagger.Container:
@@ -118,6 +139,7 @@ from dagger import dag, function
 
   Same pattern as Alpine: a non-root user ready to go.
 
+  #+NAME: debian-user
   #+begin_src python
   @function
   def debian_user(self, distro_packages: list[str] = ()) -> dagger.Container:
@@ -140,6 +162,7 @@ from dagger import dag, function
   For Python services that need Debian-specific libraries (e.g., for
   native extensions), I want the same venv setup as Alpine but on Debian.
 
+  #+NAME: debian-python-user-venv
   #+begin_src python
   @function
   def debian_python_user_venv(
@@ -173,6 +196,7 @@ from dagger import dag, function
   artifact. Since =debian()= already sets the timezone, we just pull
   =/etc/localtime= from it — no need to create a separate container.
 
+  #+NAME: debian-localtime
   #+begin_src python
   @function
   def debian_localtime(self) -> dagger.File:

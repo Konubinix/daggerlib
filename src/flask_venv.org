@@ -1,15 +1,20 @@
 #+TITLE: Ready-made Flask virtualenv
 #+LANGUAGE: en
-#+PROPERTY: header-args:python :tangle lib/flask_venv.py
+#+PROPERTY: header-args:python :tangle no
 #+PROPERTY: header-args:bash   :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
 
 I often build small Flask APIs. Instead of repeating the venv setup in
 every project, I want a pre-built virtualenv with Flask installed that
 I can copy into my final image.
 
-#+begin_src python
+#+begin_src python :tangle lib/flask_venv.py :noweb yes
 import dagger
 from dagger import function
+
+
+class FlaskMixin:
+
+    <<flask-venv>>
 #+end_src
 
 * A Flask virtualenv as a directory artifact
@@ -22,6 +27,7 @@ from dagger import function
   it can be copied into a different, leaner final image without
   repeating the install steps.
 
+  #+NAME: flask-venv
   #+begin_src python
   @function
   def flask_venv(self, pip_packages: list[str] = ()) -> dagger.Directory:

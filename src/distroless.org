@@ -1,15 +1,24 @@
 #+TITLE: Minimal production images
 #+LANGUAGE: en
-#+PROPERTY: header-args:python :tangle lib/distroless.py
+#+PROPERTY: header-args:python :tangle no
 #+PROPERTY: header-args:bash   :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
 
 For production, I want the smallest possible attack surface. Distroless
 images have no shell, no package manager — just my application and its
 runtime. But I still need the correct timezone.
 
-#+begin_src python
+#+begin_src python :tangle lib/distroless.py :noweb yes
 import dagger
 from dagger import dag, function
+
+
+class DistrolessMixin:
+
+    <<distroless-set-tz>>
+
+    <<distroless-python3-debian>>
+
+    <<distroless-debian>>
 #+end_src
 
 * Setting the timezone on distroless
@@ -24,6 +33,7 @@ from dagger import dag, function
   to get files into a distroless image since there is no shell or
   package manager to run.
 
+  #+NAME: distroless-set-tz
   #+begin_src python
   @function
   def distroless_set_tz(self, ctr: dagger.Container) -> dagger.Container:
@@ -40,6 +50,7 @@ from dagger import dag, function
 
   For Python services that need maximum security and minimum image size.
 
+  #+NAME: distroless-python3-debian
   #+begin_src python
   @function
   def distroless_python3_debian(self) -> dagger.Container:
@@ -63,6 +74,7 @@ from dagger import dag, function
 
   For Go or Rust services compiled as static binaries.
 
+  #+NAME: distroless-debian
   #+begin_src python
   @function
   def distroless_debian(self) -> dagger.Container:

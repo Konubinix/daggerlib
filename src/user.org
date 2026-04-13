@@ -1,17 +1,26 @@
 #+TITLE: Non-root user workflows
 #+LANGUAGE: en
-#+PROPERTY: header-args:python :tangle lib/user.py
+#+PROPERTY: header-args:python :tangle no
 #+PROPERTY: header-args:bash   :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
 
 Running containers as root is a security risk. I need reusable helpers
 to create users, switch to them, and set up their environment — without
 repeating the same =adduser= boilerplate in every project.
 
-#+begin_src python
+#+begin_src python :tangle lib/user.py :noweb yes
 import shlex
 
 import dagger
 from dagger import function
+
+
+class UserMixin:
+
+    <<setup-user>>
+
+    <<as-user>>
+
+    <<use-user>>
 #+end_src
 
 * Creating a user with groups and sudo
@@ -29,6 +38,7 @@ from dagger import function
   and later to prepend =~/.local/bin= to =PATH= (with =expand=True= so
   =$PATH= is resolved at build time).
 
+  #+NAME: setup-user
   #+begin_src python
   @function
   def setup_user(
@@ -92,6 +102,7 @@ from dagger import function
   like =USER= in a Dockerfile. Combined with [[https://docs.dagger.io/api/reference#definition-Container][.with_workdir]] it
   simulates a login into the user's home directory.
 
+  #+NAME: as-user
   #+begin_src python
   @function
   def as_user(
@@ -114,6 +125,7 @@ from dagger import function
   Most of the time I just want "give me a user and switch to it". This
   combines [[*Creating a user with groups and sudo][setup_user]] and [[*Switching to a user][as_user]] in one call.
 
+  #+NAME: use-user
   #+begin_src python
   @function
   def use_user(

@@ -3,7 +3,7 @@
 :END:
 #+TITLE: Docker inside containers
 #+LANGUAGE: en
-#+PROPERTY: header-args:python :tangle lib/dind.py
+#+PROPERTY: header-args:python :tangle no
 #+PROPERTY: header-args:bash   :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
 
 Some CI pipelines and integration tests need to build or run Docker
@@ -27,7 +27,7 @@ arriving at =172.17.0.1:53= to the real DNS server.  Containers
 managed by the inner Docker — including a nested Dagger engine — can
 always reach the bridge gateway, so DNS works transparently.
 
-#+begin_src python
+#+begin_src python :tangle lib/dind.py :noweb yes
 import dagger
 from dagger import dag, function
 
@@ -55,6 +55,31 @@ _DOCKERD_START = (
     "iptables -t nat -A PREROUTING -p tcp -d 172.17.0.1 --dport 53"
     " -j DNAT --to-destination $DNS_SERVER:53\n"
 )
+
+
+class DindMixin:
+
+    _EMACS_INCLUDE = ["src/", "tests/", "examples/", ".clk/",
+                      "dagger.json", ".daggerignore", "pyproject.toml",
+                      "*.sh", "*.el", "*.org"]
+
+    <<dind-container>>
+
+    <<dind-with-docker>>
+
+    <<dind-run-tests>>
+
+    <<emacs-container>>
+
+    <<dind-emacs-container>>
+
+    <<dind-tangle>>
+
+    <<dind-run-org>>
+
+    <<dind-init-examples>>
+
+    <<export-html>>
 #+end_src
 
 * Installing Docker from the official repository
@@ -88,6 +113,7 @@ apt-get install --yes docker-ce docker-ce-cli containerd.io
   Docker needs to be installed in the container first. This target handles
   adding the Docker APT repository and installing Docker CE.
 
+  #+NAME: dind-container
   #+begin_src python
   @function
   def dind_container(
@@ -146,6 +172,7 @@ apt-get install --yes docker-ce docker-ce-cli containerd.io
   etc.). Without this, =dockerd= cannot start because it needs to mount
   =tmpfs= and manipulate cgroups.
 
+  #+NAME: dind-with-docker
   #+begin_src python
   @function
   def dind_with_docker(
@@ -175,6 +202,7 @@ apt-get install --yes docker-ce docker-ce-cli containerd.io
   project tests (Python, pytest, Dagger CLI) on top of the DinD base,
   then execute =./test-host.sh= with dockerd available.
 
+  #+NAME: dind-run-tests
   #+begin_src python
   @function
   def dind_run_tests(self) -> dagger.Container:
@@ -236,6 +264,7 @@ apt-get install --yes docker-ce docker-ce-cli containerd.io
     and the Dagger CLI.  Used by =dind_run_org= and
     =dind_init_examples= whose babel blocks call =dagger call=.
 
+  #+NAME: emacs-container
   #+begin_src python
   @function
   def emacs_container(
@@ -259,6 +288,7 @@ apt-get install --yes docker-ce docker-ce-cli containerd.io
       )
   #+end_src
 
+  #+NAME: dind-emacs-container
   #+begin_src python
   @function
   def dind_emacs_container(self) -> dagger.Container:
@@ -294,11 +324,8 @@ apt-get install --yes docker-ce docker-ce-cli containerd.io
    Tangle only needs emacs — no Docker, no Dagger.  Runs
    =./tangle-host.sh= in the lightweight =emacs_container=.
 
+   #+NAME: dind-tangle
    #+begin_src python
-   _EMACS_INCLUDE = ["src/", "tests/", "examples/", ".clk/",
-                     "dagger.json", ".daggerignore", "pyproject.toml",
-                     "*.sh", "*.el", "*.org"]
-
    @function
    def dind_tangle(self) -> dagger.Directory:
        """Tangle org files inside a container and return only the modified files."""
@@ -318,6 +345,7 @@ apt-get install --yes docker-ce docker-ce-cli containerd.io
    Runs =./run-host.sh= with dockerd available (babel blocks call
    =dagger call=) and returns only the modified files.
 
+   #+NAME: dind-run-org
    #+begin_src python
    @function
    def dind_run_org(
@@ -356,6 +384,7 @@ apt-get install --yes docker-ce docker-ce-cli containerd.io
    Runs =./init-examples-host.sh= with dockerd available and returns
    only the modified files.
 
+   #+NAME: dind-init-examples
    #+begin_src python
    @function
    def dind_init_examples(
@@ -392,6 +421,7 @@ apt-get install --yes docker-ce docker-ce-cli containerd.io
    =emacs_container= (no Docker needed) and returns the =_site/=
    directory containing the HTML output.
 
+   #+NAME: export-html
    #+begin_src python
    @function
    def export_html(self) -> dagger.Directory:

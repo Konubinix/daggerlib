@@ -3,7 +3,7 @@
 :END:
 #+TITLE: Lightweight timezone-aware containers
 #+LANGUAGE: en
-#+PROPERTY: header-args:python :tangle lib/alpine.py
+#+PROPERTY: header-args:python :tangle no
 #+PROPERTY: header-args:bash   :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
 
 I need containers where logs and cron jobs use the correct timezone by
@@ -12,9 +12,24 @@ go-to base image because it's small and fast to pull. The timezone
 defaults to Europe/Paris but is configurable via the =Lib.timezone=
 field.
 
-#+begin_src python
+#+begin_src python :tangle lib/alpine.py :noweb yes
 import dagger
 from dagger import dag, function
+
+
+class AlpineMixin:
+
+    <<alpine-set-tz>>
+
+    <<alpine>>
+
+    <<alpine-user>>
+
+    <<alpine-tz>>
+
+    <<alpine-python>>
+
+    <<alpine-python-user-venv>>
 #+end_src
 
 * Setting the timezone on Alpine
@@ -30,6 +45,7 @@ from dagger import dag, function
   the zoneinfo file, and removes the package in a single step so the
   final image stays small.
 
+  #+NAME: alpine-set-tz
   #+begin_src python
   @function
   def alpine_set_tz(self, ctr: dagger.Container) -> dagger.Container:
@@ -68,6 +84,7 @@ from dagger import dag, function
   a Dockerfile. We chain =with_exec= to install any extra packages the
   caller requested.
 
+  #+NAME: alpine
   #+begin_src python
   @function
   def alpine(self, distro_packages: list[str] = ()) -> dagger.Container:
@@ -96,6 +113,7 @@ from dagger import dag, function
   Running as root in containers is risky. I want a default user ready to
   go, so I don't have to repeat user-creation boilerplate.
 
+  #+NAME: alpine-user
   #+begin_src python
   @function
   def alpine_user(
@@ -140,6 +158,7 @@ from dagger import dag, function
   [[https://docs.dagger.io/api/reference#definition-Directory][.with_file]] adds files into it. Together they let us bundle timezone
   files extracted from Alpine so other containers can import them.
 
+  #+NAME: alpine-tz
   #+begin_src python
   @function
   def alpine_tz(self) -> dagger.Directory:
@@ -171,6 +190,7 @@ from dagger import dag, function
 
   I often need a quick Python environment on Alpine for scripts and tools.
 
+  #+NAME: alpine-python
   #+begin_src python
   @function
   def alpine_python(self, distro_packages: list[str] = ()) -> dagger.Container:
@@ -199,6 +219,7 @@ from dagger import dag, function
   =WORKDIR= in a Dockerfile. Setting it to =/app= means subsequent
   commands and the virtualenv land in the right place.
 
+  #+NAME: alpine-python-user-venv
   #+begin_src python
   @function
   def alpine_python_user_venv(
