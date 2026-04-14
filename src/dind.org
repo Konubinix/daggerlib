@@ -7,8 +7,9 @@
 #+PROPERTY: header-args:bash   :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
 
 Some CI pipelines and integration tests need to build or run Docker
-images. I need a way to run Docker inside a Dagger container (DinD),
-handling cgroup setup, tmpfs mounts, and dockerd lifecycle.
+images. I run Docker as a [[https://github.com/dagger/dagger/discussions/12595][sidecar service]]: the official =docker:dind=
+image runs =dockerd= in a separate container, and the client container
+only needs the Docker CLI with =DOCKER_HOST= pointing at the sidecar.
 
 When running Docker-in-Docker inside a Dagger container, there is a
 DNS subnet collision to handle. The outer Dagger engine places the
@@ -19,59 +20,42 @@ container, it creates its own =dagger0= bridge in the same
 =10.87.0.1=, making the DNS server unreachable from containers managed
 by the inner engine.
 
-The fix: before starting =dockerd=, save the current DNS server and
-tell Docker (via =daemon.json=) to hand out =172.17.0.1= (the Docker
-bridge gateway) as the DNS server for containers.  After =dockerd=
-creates the bridge, add iptables DNAT rules that forward DNS queries
-arriving at =172.17.0.1:53= to the real DNS server.  Containers
-managed by the inner Docker — including a nested Dagger engine — can
-always reach the bridge gateway, so DNS works transparently.
+The fix lives in the sidecar wrapper script: before starting
+=dockerd=, save the current DNS server and tell Docker (via
+=daemon.json=) to hand out =172.17.0.1= (the Docker bridge gateway)
+as the DNS server for containers.  After =dockerd= creates the
+bridge, add iptables DNAT rules that forward DNS queries arriving at
+=172.17.0.1:53= to the real DNS server.  Containers managed by the
+inner Docker — including a nested Dagger engine — can always reach the
+bridge gateway, so DNS works transparently.
 
 #+begin_src python :tangle lib/dind.py :noweb yes
 import dagger
 from dagger import dag, function
 
 
-_CGROUP_SETUP = (
-    "mount -t cgroup2 cgroup2 /sys/fs/cgroup 2>/dev/null || true\n"
-    "mkdir -p /sys/fs/cgroup/init\n"
-    "xargs -rn1 < /sys/fs/cgroup/cgroup.procs > /sys/fs/cgroup/init/cgroup.procs 2>/dev/null || true\n"
-    "sed -e 's/ / +/g' -e 's/^/+/' < /sys/fs/cgroup/cgroup.controllers"
-    " > /sys/fs/cgroup/cgroup.subtree_control 2>/dev/null || true\n"
-)
-
-_DNS_SETUP = (
-    "DNS_SERVER=$(awk '/^nameserver/{print $2; exit}' /etc/resolv.conf)\n"
-    "mkdir -p /etc/docker\n"
-    'echo \'{"dns": ["172.17.0.1"]}\' > /etc/docker/daemon.json\n'
-)
-
-_DOCKERD_START = (
-    "start_dockerd() {\n"
-    "  rm -f /var/log/dockerd.log\n"
-    "  mkdir -p /var/lib/docker\n"
-    "  dockerd &>/var/log/dockerd.log &\n"
-    "  for i in $(seq 1 30); do docker info &>/dev/null && return 0; sleep 0.2; done\n"
-    "  kill %% 2>/dev/null; wait 2>/dev/null\n"
-    "  return 1\n"
-    "}\n"
-    "if ! start_dockerd; then\n"
-    "  echo 'dockerd failed to start, wiping /var/lib/docker and retrying...' >&2\n"
-    "  rm -rf /var/lib/docker/*\n"
-    "  if ! start_dockerd; then\n"
-    "    echo '=== dockerd failed after wipe ===' >&2\n"
-    "    cat /var/log/dockerd.log >&2\n"
-    "    exit 1\n"
-    "  fi\n"
-    "fi\n"
-    "iptables -t nat -A PREROUTING -p udp -d 172.17.0.1 --dport 53"
-    " -j DNAT --to-destination $DNS_SERVER:53\n"
-    "iptables -t nat -A PREROUTING -p tcp -d 172.17.0.1 --dport 53"
-    " -j DNAT --to-destination $DNS_SERVER:53\n"
-)
+_DIND_DNS_ENTRYPOINT = """\
+#!/bin/sh
+DNS_SERVER=$(awk '/^nameserver/{print $2; exit}' /etc/resolv.conf)
+(
+    i=0
+    while [ $i -lt 30 ]; do
+        docker info >/dev/null 2>&1 && break
+        i=$((i+1))
+        sleep 0.2
+    done
+    iptables -t nat -A PREROUTING -p udp -d 172.17.0.1 --dport 53 \
+        -j DNAT --to-destination "$DNS_SERVER:53" 2>/dev/null || true
+    iptables -t nat -A PREROUTING -p tcp -d 172.17.0.1 --dport 53 \
+        -j DNAT --to-destination "$DNS_SERVER:53" 2>/dev/null || true
+) &
+exec dockerd-entrypoint-orig.sh "$@"
+"""
 
 
 class DindMixin:
+
+    <<dind-service>>
 
     <<dind-container>>
 
@@ -92,36 +76,61 @@ class DindMixin:
     <<export-html>>
 #+end_src
 
-* Installing Docker from the official repository
+* Docker daemon sidecar
+  :PROPERTIES:
+  :ID:       e7a2f1c3-8d4b-4a9e-b5c6-1f0a3e2d4b5c
+  :END:
 
-  This script adds the Docker APT repository and installs Docker CE.
-  It is tangled to a standalone shell file so the Python code can
-  inject it into the container as-is.
+  The =docker:dind= image handles cgroup setup, storage driver
+  selection, and dockerd lifecycle. The wrapper script adds DNS
+  forwarding and retry-on-corruption logic on top.
 
-  #+begin_src sh :tangle lib/docker-repo-install.sh :tangle-mode (identity #o755)
-#!/bin/sh
-set -eu
-. /etc/os-release
-install -m 0755 -d /etc/apt/keyrings
-curl -fsSL "https://download.docker.com/linux/$ID/gpg" \
-    -o /etc/apt/keyrings/docker.asc
-chmod a+r /etc/apt/keyrings/docker.asc
-echo "deb [arch=$(dpkg --print-architecture) \
-  signed-by=/etc/apt/keyrings/docker.asc] \
-  https://download.docker.com/linux/$ID \
-  $VERSION_CODENAME stable" \
-    > /etc/apt/sources.list.d/docker.list
-apt-get update
-apt-get install --yes docker-ce docker-ce-cli containerd.io
+  #+NAME: dind-service
+  #+begin_src python
+  @function
+  def dind_service(self) -> dagger.Service:
+      """Return a Docker daemon running as a sidecar service.
+
+      Wraps the docker:dind entrypoint with DNS forwarding so
+      nested Dagger engines can resolve names despite the
+      10.87.0.0/16 subnet collision.
+      """
+      return (
+          dag.container()
+          .from_(self.dind_image)
+          .with_env_variable("DOCKER_TLS_CERTDIR", "")
+          .with_env_variable("TINI_SUBREAPER", "")
+          .with_new_file(
+              "/etc/docker/daemon.json",
+              '{"dns": ["172.17.0.1"]}',
+          )
+          .with_exec([
+              "mv",
+              "/usr/local/bin/dockerd-entrypoint.sh",
+              "/usr/local/bin/dockerd-entrypoint-orig.sh",
+          ])
+          .with_new_file(
+              "/usr/local/bin/dockerd-entrypoint.sh",
+              _DIND_DNS_ENTRYPOINT,
+              permissions=0o755,
+          )
+          .with_mounted_cache("/var/lib/docker", dag.cache_volume("dind-docker"))
+          .with_exposed_port(2375)
+          .as_service(
+              use_entrypoint=True,
+              insecure_root_capabilities=True,
+          )
+      )
   #+end_src
 
-* Preparing a DinD-capable container
+* Preparing a DinD client container
   :PROPERTIES:
   :ID:       03b5bc42-932d-49f9-b922-ee7cba52528a
   :END:
 
-  Docker needs to be installed in the container first. This target handles
-  adding the Docker APT repository and installing Docker CE.
+  The client container only needs the Docker CLI — the daemon runs in
+  the sidecar. The CLI binary is copied from the same =docker:dind=
+  image (statically linked, works on any Linux).
 
   #+NAME: dind-container
   #+begin_src python
@@ -130,40 +139,17 @@ apt-get install --yes docker-ce docker-ce-cli containerd.io
       self,
       base: dagger.Container | None = None,
   ) -> dagger.Container:
-      """Return a container with Docker installed, ready for DinD.
+      """Return a container with the Docker CLI installed.
 
-      If base is provided, Docker is installed into it (must be
-      Debian/Ubuntu-based).  Otherwise uses Lib.dind_ubuntu_image.
-      The Docker APT repo setup is done inline so the container build
-      has no dependency on the project source — only the base image and
-      package versions affect the cache.
+      If base is provided, the CLI is added to it.
+      Otherwise uses Lib.dind_ubuntu_image.
       """
       if base is None:
           base = dag.container().from_(self.dind_ubuntu_image)
-
-      return (
-          base
-          .with_exec(["apt-get", "update"])
-          .with_exec([
-              "apt-get", "install", "--yes",
-              "ca-certificates", "curl", "gnupg", "iptables",
-          ])
-          .with_exec([
-              "bash", "-c",
-              ". /etc/os-release && "
-              "install -m 0755 -d /etc/apt/keyrings && "
-              "curl -fsSL https://download.docker.com/linux/$ID/gpg"
-              " -o /etc/apt/keyrings/docker.asc && "
-              "chmod a+r /etc/apt/keyrings/docker.asc && "
-              'echo "deb [arch=$(dpkg --print-architecture)'
-              " signed-by=/etc/apt/keyrings/docker.asc]"
-              " https://download.docker.com/linux/$ID"
-              ' $VERSION_CODENAME stable"'
-              " > /etc/apt/sources.list.d/docker.list && "
-              "apt-get update && "
-              "apt-get install --yes docker-ce docker-ce-cli containerd.io",
-          ])
+      docker_cli = (
+          dag.container().from_(self.dind_image).file("/usr/local/bin/docker")
       )
+      return base.with_file("/usr/local/bin/docker", docker_cli)
   #+end_src
 
 * Running commands with dockerd
@@ -171,16 +157,10 @@ apt-get install --yes docker-ce docker-ce-cli containerd.io
   :ID:       a02a8270-5268-4bb9-bcbc-56ebb5d5dfd5
   :END:
 
-  Split into two layers so dagger can cache the dockerd-ready state:
-
-  - =dind_setup= starts dockerd — always the same, cacheable.
-  - =dind_with_docker= runs the user command on top — varies per call.
-
-  [[https://docs.dagger.io/api/reference#definition-Container][insecure_root_capabilities=True]] tells Dagger to run the command with
-  elevated privileges — the container gets the Linux capabilities
-  normally stripped for safety (mounting filesystems, managing cgroups,
-  etc.). Without this, =dockerd= cannot start because it needs to mount
-  =tmpfs= and manipulate cgroups.
+  The client container binds the Docker daemon sidecar and sets
+  =DOCKER_HOST= so the CLI talks to it over TCP. The daemon runs in
+  the sidecar with elevated privileges — the client container does not
+  need =insecure_root_capabilities=.
 
   #+NAME: dind-with-docker
   #+begin_src python
@@ -190,19 +170,18 @@ apt-get install --yes docker-ce docker-ce-cli containerd.io
       cmd: str,
       ctr: dagger.Container | None = None,
   ) -> dagger.Container:
-      """Run a shell command inside the container with dockerd available.
+      """Run a shell command inside a container with Docker available.
 
-      Handles cgroup v2 setup, tmpfs for /var/lib/docker,
-      and dockerd lifecycle.  These must run in the same exec as the
-      user command because processes and mounts do not persist across
-      exec boundaries.
+      Binds a Docker daemon sidecar and sets DOCKER_HOST so the
+      Docker CLI in the container talks to the sidecar over TCP.
       """
       if ctr is None:
           ctr = self.dind_container()
-      shell_cmd = _DNS_SETUP + _CGROUP_SETUP + _DOCKERD_START + cmd
-      return ctr.with_exec(
-          ["bash", "-c", shell_cmd],
-          insecure_root_capabilities=True,
+      return (
+          ctr
+          .with_service_binding("docker", self.dind_service())
+          .with_env_variable("DOCKER_HOST", "tcp://docker:2375")
+          .with_exec(["bash", "-c", cmd])
       )
   #+end_src
 
@@ -233,9 +212,10 @@ apt-get install --yes docker-ce docker-ce-cli containerd.io
       ctr = self.dind_container()
       ctr = (
           ctr
+          .with_exec(["apt-get", "update"])
           .with_exec([
               "apt-get", "install", "--yes",
-              "python3", "python3-pip", "python3-venv",
+              "curl", "python3", "python3-pip", "python3-venv",
           ])
           .with_exec([
               "pip3", "install", "--break-system-packages",
@@ -249,7 +229,6 @@ apt-get install --yes docker-ce docker-ce-cli containerd.io
           .with_directory("/work", src)
           .with_workdir("/work")
           .with_directory("/work/.git", dag.directory())
-          .with_mounted_cache("/var/lib/docker", dag.cache_volume("dind-docker"))
       )
       cmd = (
           "echo '=== dockerd ready ===' && "
@@ -271,9 +250,9 @@ apt-get install --yes docker-ce docker-ce-cli containerd.io
 
   - =emacs_container= — lightweight: just emacs, git, python, ruff.
     Used by =dind_tangle= which doesn't need Docker or Dagger.
-  - =dind_emacs_container= — extends the DinD base with emacs, ruff,
-    and the Dagger CLI.  Used by =dind_run_org= and
-    =dind_init_examples= whose babel blocks call =dagger call=.
+  - =dind_emacs_container= — adds emacs, ruff, the Docker CLI, and
+    the Dagger CLI.  Used by =dind_run_org= and =dind_init_examples=
+    whose babel blocks call =dagger call=.
 
   #+NAME: emacs-container
   #+begin_src python
@@ -311,9 +290,10 @@ apt-get install --yes docker-ce docker-ce-cli containerd.io
       ctr = self.dind_container()
       return (
           ctr
+          .with_exec(["apt-get", "update"])
           .with_exec([
               "apt-get", "install", "--yes",
-              "emacs-nox", "git", "python3", "python3-pip", "python3-venv",
+              "curl", "emacs-nox", "git", "python3", "python3-pip", "python3-venv",
           ])
           .with_exec([
               "pip3", "install", "--break-system-packages", "ruff",
@@ -385,7 +365,6 @@ apt-get install --yes docker-ce docker-ce-cli containerd.io
            .with_directory("/work", src)
            .with_workdir("/work")
            .with_mounted_cache("/work/.tangle-deps", dag.cache_volume("tangle-deps"))
-           .with_mounted_cache("/var/lib/docker", dag.cache_volume("dind-docker"))
        )
        before = ctr.directory("/work")
        cmd = "./run-host.sh"
@@ -424,7 +403,6 @@ apt-get install --yes docker-ce docker-ce-cli containerd.io
            .with_directory("/work", src)
            .with_workdir("/work")
            .with_mounted_cache("/work/.tangle-deps", dag.cache_volume("tangle-deps"))
-           .with_mounted_cache("/var/lib/docker", dag.cache_volume("dind-docker"))
        )
        before = ctr.directory("/work")
        cmd = "./init-examples-host.sh"

@@ -3,94 +3,79 @@ import dagger
 from dagger import dag, function
 
 
-_CGROUP_SETUP = (
-    "mount -t cgroup2 cgroup2 /sys/fs/cgroup 2>/dev/null || true\n"
-    "mkdir -p /sys/fs/cgroup/init\n"
-    "xargs -rn1 < /sys/fs/cgroup/cgroup.procs > /sys/fs/cgroup/init/cgroup.procs 2>/dev/null || true\n"
-    "sed -e 's/ / +/g' -e 's/^/+/' < /sys/fs/cgroup/cgroup.controllers"
-    " > /sys/fs/cgroup/cgroup.subtree_control 2>/dev/null || true\n"
-)
-
-_DNS_SETUP = (
-    "DNS_SERVER=$(awk '/^nameserver/{print $2; exit}' /etc/resolv.conf)\n"
-    "mkdir -p /etc/docker\n"
-    'echo \'{"dns": ["172.17.0.1"]}\' > /etc/docker/daemon.json\n'
-)
-
-_DOCKERD_START = (
-    "start_dockerd() {\n"
-    "  rm -f /var/log/dockerd.log\n"
-    "  mkdir -p /var/lib/docker\n"
-    "  dockerd &>/var/log/dockerd.log &\n"
-    "  for i in $(seq 1 30); do docker info &>/dev/null && return 0; sleep 0.2; done\n"
-    "  kill %% 2>/dev/null; wait 2>/dev/null\n"
-    "  return 1\n"
-    "}\n"
-    "if ! start_dockerd; then\n"
-    "  echo 'dockerd failed to start, wiping /var/lib/docker and retrying...' >&2\n"
-    "  rm -rf /var/lib/docker/*\n"
-    "  if ! start_dockerd; then\n"
-    "    echo '=== dockerd failed after wipe ===' >&2\n"
-    "    cat /var/log/dockerd.log >&2\n"
-    "    exit 1\n"
-    "  fi\n"
-    "fi\n"
-    "iptables -t nat -A PREROUTING -p udp -d 172.17.0.1 --dport 53"
-    " -j DNAT --to-destination $DNS_SERVER:53\n"
-    "iptables -t nat -A PREROUTING -p tcp -d 172.17.0.1 --dport 53"
-    " -j DNAT --to-destination $DNS_SERVER:53\n"
-)
+_DIND_DNS_ENTRYPOINT = """\
+#!/bin/sh
+DNS_SERVER=$(awk '/^nameserver/{print $2; exit}' /etc/resolv.conf)
+(
+    i=0
+    while [ $i -lt 30 ]; do
+        docker info >/dev/null 2>&1 && break
+        i=$((i+1))
+        sleep 0.2
+    done
+    iptables -t nat -A PREROUTING -p udp -d 172.17.0.1 --dport 53 \
+        -j DNAT --to-destination "$DNS_SERVER:53" 2>/dev/null || true
+    iptables -t nat -A PREROUTING -p tcp -d 172.17.0.1 --dport 53 \
+        -j DNAT --to-destination "$DNS_SERVER:53" 2>/dev/null || true
+) &
+exec dockerd-entrypoint-orig.sh "$@"
+"""
 
 
 class DindMixin:
+    @function
+    def dind_service(self) -> dagger.Service:
+        """Return a Docker daemon running as a sidecar service.
+
+        Wraps the docker:dind entrypoint with DNS forwarding so
+        nested Dagger engines can resolve names despite the
+        10.87.0.0/16 subnet collision.
+        """
+        return (
+            dag.container()
+            .from_(self.dind_image)
+            .with_env_variable("DOCKER_TLS_CERTDIR", "")
+            .with_env_variable("TINI_SUBREAPER", "")
+            .with_new_file(
+                "/etc/docker/daemon.json",
+                '{"dns": ["172.17.0.1"]}',
+            )
+            .with_exec(
+                [
+                    "mv",
+                    "/usr/local/bin/dockerd-entrypoint.sh",
+                    "/usr/local/bin/dockerd-entrypoint-orig.sh",
+                ]
+            )
+            .with_new_file(
+                "/usr/local/bin/dockerd-entrypoint.sh",
+                _DIND_DNS_ENTRYPOINT,
+                permissions=0o755,
+            )
+            .with_mounted_cache("/var/lib/docker", dag.cache_volume("dind-docker"))
+            .with_exposed_port(2375)
+            .as_service(
+                use_entrypoint=True,
+                insecure_root_capabilities=True,
+            )
+        )
+
     @function
     def dind_container(
         self,
         base: dagger.Container | None = None,
     ) -> dagger.Container:
-        """Return a container with Docker installed, ready for DinD.
+        """Return a container with the Docker CLI installed.
 
-        If base is provided, Docker is installed into it (must be
-        Debian/Ubuntu-based).  Otherwise uses Lib.dind_ubuntu_image.
-        The Docker APT repo setup is done inline so the container build
-        has no dependency on the project source — only the base image and
-        package versions affect the cache.
+        If base is provided, the CLI is added to it.
+        Otherwise uses Lib.dind_ubuntu_image.
         """
         if base is None:
             base = dag.container().from_(self.dind_ubuntu_image)
-
-        return (
-            base.with_exec(["apt-get", "update"])
-            .with_exec(
-                [
-                    "apt-get",
-                    "install",
-                    "--yes",
-                    "ca-certificates",
-                    "curl",
-                    "gnupg",
-                    "iptables",
-                ]
-            )
-            .with_exec(
-                [
-                    "bash",
-                    "-c",
-                    ". /etc/os-release && "
-                    "install -m 0755 -d /etc/apt/keyrings && "
-                    "curl -fsSL https://download.docker.com/linux/$ID/gpg"
-                    " -o /etc/apt/keyrings/docker.asc && "
-                    "chmod a+r /etc/apt/keyrings/docker.asc && "
-                    'echo "deb [arch=$(dpkg --print-architecture)'
-                    " signed-by=/etc/apt/keyrings/docker.asc]"
-                    " https://download.docker.com/linux/$ID"
-                    ' $VERSION_CODENAME stable"'
-                    " > /etc/apt/sources.list.d/docker.list && "
-                    "apt-get update && "
-                    "apt-get install --yes docker-ce docker-ce-cli containerd.io",
-                ]
-            )
+        docker_cli = (
+            dag.container().from_(self.dind_image).file("/usr/local/bin/docker")
         )
+        return base.with_file("/usr/local/bin/docker", docker_cli)
 
     @function
     def dind_with_docker(
@@ -98,19 +83,17 @@ class DindMixin:
         cmd: str,
         ctr: dagger.Container | None = None,
     ) -> dagger.Container:
-        """Run a shell command inside the container with dockerd available.
+        """Run a shell command inside a container with Docker available.
 
-        Handles cgroup v2 setup, tmpfs for /var/lib/docker,
-        and dockerd lifecycle.  These must run in the same exec as the
-        user command because processes and mounts do not persist across
-        exec boundaries.
+        Binds a Docker daemon sidecar and sets DOCKER_HOST so the
+        Docker CLI in the container talks to the sidecar over TCP.
         """
         if ctr is None:
             ctr = self.dind_container()
-        shell_cmd = _DNS_SETUP + _CGROUP_SETUP + _DOCKERD_START + cmd
-        return ctr.with_exec(
-            ["bash", "-c", shell_cmd],
-            insecure_root_capabilities=True,
+        return (
+            ctr.with_service_binding("docker", self.dind_service())
+            .with_env_variable("DOCKER_HOST", "tcp://docker:2375")
+            .with_exec(["bash", "-c", cmd])
         )
 
     @function
@@ -140,11 +123,13 @@ class DindMixin:
 
         ctr = self.dind_container()
         ctr = (
-            ctr.with_exec(
+            ctr.with_exec(["apt-get", "update"])
+            .with_exec(
                 [
                     "apt-get",
                     "install",
                     "--yes",
+                    "curl",
                     "python3",
                     "python3-pip",
                     "python3-venv",
@@ -170,7 +155,6 @@ class DindMixin:
             .with_directory("/work", src)
             .with_workdir("/work")
             .with_directory("/work/.git", dag.directory())
-            .with_mounted_cache("/var/lib/docker", dag.cache_volume("dind-docker"))
         )
         cmd = (
             "echo '=== dockerd ready ===' && "
@@ -223,11 +207,13 @@ class DindMixin:
         """
         ctr = self.dind_container()
         return (
-            ctr.with_exec(
+            ctr.with_exec(["apt-get", "update"])
+            .with_exec(
                 [
                     "apt-get",
                     "install",
                     "--yes",
+                    "curl",
                     "emacs-nox",
                     "git",
                     "python3",
@@ -311,7 +297,6 @@ class DindMixin:
             ctr.with_directory("/work", src)
             .with_workdir("/work")
             .with_mounted_cache("/work/.tangle-deps", dag.cache_volume("tangle-deps"))
-            .with_mounted_cache("/var/lib/docker", dag.cache_volume("dind-docker"))
         )
         before = ctr.directory("/work")
         cmd = "./run-host.sh"
@@ -348,7 +333,6 @@ class DindMixin:
             ctr.with_directory("/work", src)
             .with_workdir("/work")
             .with_mounted_cache("/work/.tangle-deps", dag.cache_volume("tangle-deps"))
-            .with_mounted_cache("/var/lib/docker", dag.cache_volume("dind-docker"))
         )
         before = ctr.directory("/work")
         cmd = "./init-examples-host.sh"

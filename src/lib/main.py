@@ -33,6 +33,7 @@ class Lib(
     default_username: str = "sam"
     timezone: str = "Europe/Paris"
     dind_ubuntu_image: str = "ubuntu:24.04"
+    dind_image: str = "docker:27-dind"
 
     @property
     def debian_tag(self) -> str:
