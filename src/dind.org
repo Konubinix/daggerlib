@@ -89,6 +89,13 @@ class DindMixin:
   selection, and dockerd lifecycle. The wrapper script adds DNS
   forwarding and retry-on-corruption logic on top.
 
+  TLS is explicitly disabled (=DOCKER_TLS_CERTDIR= set to an empty
+  string) because the daemon only talks to the client container inside
+  Dagger's sandbox.  Docker warns that "in future versions this will
+  be a hard failure."  *This is safe to ignore:* Dagger owns this
+  daemon and will update their images when Docker enforces TLS.  Every
+  Dagger user sees the same warning.
+
   #+NAME: dind-service
   #+begin_src python
   @function
