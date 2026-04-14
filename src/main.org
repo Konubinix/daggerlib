@@ -1,4 +1,27 @@
-# [[file:../main.org::+begin_src python :tangle lib/main.py][No heading:2]]
+:PROPERTIES:
+:ID:       48120ecb-7e3c-4cdb-8856-8304b784e40e
+:END:
+#+TITLE: Module entry point
+#+LANGUAGE: en
+#+PROPERTY: header-args:python :tangle no
+
+The =__init__.py= simply re-exports the =Lib= class:
+
+#+begin_src python :tangle lib/__init__.py
+"""Reusable container helpers: base images, timezone, user setup, DinD, etc."""
+
+from .main import Lib as Lib
+#+end_src
+
+The =main.py= defines the =@object_type= class that composes all the
+functions defined in the use-case org files. Besides image versions,
+the class carries a =default_username= field so the container user
+is defined once and overridable globally — individual functions
+default to =None= and fall back to =self.default_username=. The
+=timezone= field (default =Europe/Paris=) controls which timezone is
+set in all container variants.
+
+#+begin_src python :tangle lib/main.py
 """Reusable container helpers: base images, timezone, user setup, DinD, etc."""
 
 from dagger import object_type
@@ -40,6 +63,4 @@ class Lib(
     @property
     def debian_tag(self) -> str:
         return f"{self.debian_version}.{self.debian_min_version}-slim"
-
-
-# No heading:2 ends here
+#+end_src
