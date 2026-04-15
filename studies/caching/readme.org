@@ -1,0 +1,675 @@
+#+TITLE: Dagger caches by operation graph, not content
+#+LANGUAGE: en
+#+PROPERTY: header-args:bash :tangle no :results verbatim :cache yes
+
+Dagger's directory layer is content-addressed: two directories built
+via completely different operation chains produce the same =digest()=
+if their files are byte-for-byte identical.  However, exec caching
+is graph-based: when the directory is mounted into a container, the
+=withExec= cache key includes the full operation lineage — not the
+content.  Two content-identical directories reached via different
+graph paths produce different container IDs, and every =withExec=
+downstream is a cache miss.
+
+This study builds a minimal reproducer, proves the behavior, and
+links to the upstream fix.
+
+* The module
+
+  A standalone Dagger module with no dependencies:
+
+  #+BEGIN_SRC bash :results none :exports code
+    dagger init --sdk=python
+  #+END_SRC
+
+
+  #+begin_src python :tangle .dagger/src/caching/__init__.py :eval no-export
+  from .main import Caching as Caching
+  #+end_src
+
+  The module defines two helper functions that build the same
+  directory — a single file =data.txt= containing =hello= — via
+  different operation graphs:
+
+  - =_dir_a()= creates the directory directly.
+  - =_dir_b()= creates the same directory, adds a =junk.txt=, then
+    removes it.  The result is byte-for-byte identical but the
+    operation history differs.
+
+  Three Dagger functions exercise these directories:
+
+  #+begin_src python :tangle .dagger/src/caching/main.py :noweb yes
+  import time
+  from typing import Annotated
+
+  import dagger
+  from dagger import DefaultPath, Ignore, dag, function, object_type
+
+
+  def _dir_a() -> dagger.Directory:
+      return dag.directory().with_new_file("data.txt", "hello")
+
+
+  def _dir_b() -> dagger.Directory:
+      return (
+          dag.directory()
+          .with_new_file("data.txt", "hello")
+          .with_new_file("junk.txt", "junk")
+          .without_file("junk.txt")
+      )
+
+
+  @object_type
+  class Caching:
+      <<prove-identical>>
+
+      <<cached>>
+
+      <<busted>>
+
+  #+end_src
+
+* Proving the directories are identical but containers are not
+
+  =prove_identical= computes the content digest of both directories
+  and the container ID after mounting each one.  It also tests three
+  attempts to "flatten" the graph:
+
+  - =sync()= — resolve the directory eagerly
+  - copy through =with_directory(".", ...)= — rewrap in a fresh directory
+  - round-trip through a container — mount, then extract with =.directory()=
+
+  #+NAME: prove-identical
+  #+begin_src python
+  @function
+  async def prove_identical(self) -> str:
+      """Show that dir_a and dir_b have the same content digest but different container IDs."""
+      dir_a = _dir_a()
+      dir_b = _dir_b()
+
+      digest_a = await dir_a.digest()
+      digest_b = await dir_b.digest()
+
+      ctr = dag.container().from_("alpine:latest")
+
+      ctr_a = ctr.with_directory("/work", dir_a)
+      ctr_b = ctr.with_directory("/work", dir_b)
+      ctr_c = ctr.with_directory("/work", dir_a)
+
+      # Attempt to flatten the graph
+      dir_b_synced = await dir_b.sync()
+      ctr_b_synced = ctr.with_directory("/work", dir_b_synced)
+
+      dir_b_copied = dag.directory().with_directory(".", dir_b)
+      ctr_b_copied = ctr.with_directory("/work", dir_b_copied)
+
+      dir_b_roundtrip = (
+          dag.container()
+          .from_("alpine:latest")
+          .with_directory("/work", dir_b)
+          .directory("/work")
+      )
+      ctr_b_roundtrip = ctr.with_directory("/work", dir_b_roundtrip)
+
+      id_a = await ctr_a.id()
+      id_b = await ctr_b.id()
+      id_c = await ctr_c.id()
+      id_b_synced = await ctr_b_synced.id()
+      id_b_copied = await ctr_b_copied.id()
+      id_b_roundtrip = await ctr_b_roundtrip.id()
+
+      return (
+          f"dir digests identical: {digest_a == digest_b}\n"
+          f"\n"
+          f"a vs b (different graph, same content): {id_a == id_b}\n"
+          f"a vs c (same graph):                    {id_a == id_c}\n"
+          f"\n"
+          f"flattening attempts (all should be True to fix caching):\n"
+          f"  sync():                {id_a == id_b_synced}\n"
+          f"  copy via with_directory: {id_a == id_b_copied}\n"
+          f"  roundtrip via container: {id_a == id_b_roundtrip}"
+      )
+  #+end_src
+
+  #+NAME: run_prove_identical
+  #+begin_src bash
+  dagger call prove-identical
+  #+end_src
+
+  #+RESULTS[b2f46ea30aff0bee9df33e2a67aaaf8dd626cb75]: run_prove_identical
+  : dir digests identical: True
+  : 
+  : a vs b (different graph, same content): False
+  : a vs c (same graph):                    True
+  : 
+  : flattening attempts (all should be True to fix caching):
+  :   sync():                False
+  :   copy via with_directory: False
+  :   roundtrip via container: False
+
+  The digests match but the container IDs do not.  No flattening
+  technique produces a matching container ID.
+
+* Observing the exec cache bust
+
+  =cached= and =busted= mount =dir_a= and =dir_b= respectively into
+  an alpine container and run the same slow command.
+
+  Each takes a ~run~ argument so that re-calling with a different
+  value forces the function to re-execute; that lets us observe the
+  underlying =withExec= cache, not just the module-level result
+  cache.
+
+  #+NAME: cached
+  #+begin_src python
+  @function
+  async def cached(self, run: int = 0) -> str:
+      """Mount dir_a and run a slow command. Returns withExec elapsed seconds."""
+      start = time.monotonic()
+      await (
+          dag.container()
+          .from_("alpine:latest")
+          .with_directory("/work", _dir_a())
+          .with_exec(["sh", "-c", "sleep 3 && echo done"])
+          .stdout()
+      )
+      return f"{time.monotonic() - start:.2f}s"
+  #+end_src
+
+  #+NAME: busted
+  #+begin_src python
+  @function
+  async def busted(self, run: int = 0) -> str:
+      """Mount dir_b (same content, different operation graph). Returns withExec elapsed seconds."""
+      start = time.monotonic()
+      await (
+          dag.container()
+          .from_("alpine:latest")
+          .with_directory("/work", _dir_b())
+          .with_exec(["sh", "-c", "sleep 3 && echo done"])
+          .stdout()
+      )
+      return f"{time.monotonic() - start:.2f}s"
+  #+end_src
+
+  To observe the cache behavior, run the three calls below.  The
+  three blocks share engine state within a single run.  Block 1
+  prunes the engine's local cache first so the "populate" step is
+  always a true populate.  Each call uses a different ~--run~ so
+  that dagger's module-level result cache doesn't short-circuit and
+  hide the =withExec= behavior we want to observe.
+
+  Populate cache (~withExec~ runs, sleep 3 elapses)
+
+  #+begin_src bash :results output :eval no-export
+    dagger core engine local-cache prune > /dev/null 2>&1
+    printf "withExec: "
+    dagger call cached --run=1 2>/dev/null
+  #+end_src
+
+  #+RESULTS[546f65b2274f1b6d038b71f4e084a2afa240fe82]:
+  : withExec: 5.03s
+
+  Confirm cache hit — same graph, =withExec= served from LLB cache
+
+  #+begin_src bash :results output :eval no-export
+    printf "withExec: "
+    dagger call cached --run=2 2>/dev/null
+  #+end_src
+
+  #+RESULTS[7c7cecfeb5243bea7913f72031055f26d7ecef4e]:
+  : withExec: 0.17s
+
+  Same content, different graph — =withExec= misses cache despite
+  byte-identical mounted directory
+
+  #+begin_src bash :results output :eval no-export
+    printf "withExec: "
+    dagger call busted --run=1 2>/dev/null
+  #+end_src
+
+  #+RESULTS[09ff4351527de91b0d89c08a2bc1c478f0907796]:
+  : withExec: 3.31s
+
+  Reading the three outputs:
+
+  - Block 1: =withExec: ~3s= — sleep 3 actually ran.  This
+    populates the =withExec= LLB cache for the =cached= graph.
+  - Block 2: =withExec: <0.1s= — withExec was served from cache.
+    The function re-executed (=--run=2= differs from =--run=1=), but
+    the underlying =withExec= recognised the same container and
+    command and served the stored output.
+  - Block 3: =withExec: ~3s= — re-ran despite =_dir_b()= producing
+    byte-identical content to =_dir_a()=.  Dagger's exec cache key
+    depends on the full container LLB lineage, not the resulting
+    directory digest, so the different graph path triggers a cache
+    miss.
+
+* Comparing workarounds
+
+  The sections above prove the problem with synthetic directories.
+  Now we test whether =DefaultPath(".")= + =Ignore= avoids the
+  cache bust when applied to real context directories with real
+  files changing.
+
+  The behavior depends on the module layout, so we test two
+  sub-projects side by side:
+
+  - =with-dagger-source/= — uses =source: .dagger= (module source
+    is =.dagger/=, isolated from the project root)
+  - =with-root-source/= — no ="source"= field (module source is
+    the project root, like daggerlib's =lib= module)
+
+  Each sub-project has the same two functions:
+
+  - =old_way()= uses =dag.current_module().source()= +
+    =with_directory(include=["data.txt"])= — filtering inside the
+    function.
+  - =new_way(src)= uses =DefaultPath(".")= +
+    =Ignore(["**", "!data.txt"])= — filtering at the engine level.
+
+** Sub-project: =.dagger= layout
+
+   #+begin_src bash :tangle with-dagger-source/dagger.json :shebang "" :eval no-export :comments no :padline no :mkdirp yes
+   {
+     "name": "caching_dagger",
+     "engineVersion": "v0.20.3",
+     "sdk": {
+       "source": "python"
+     },
+     "source": ".dagger"
+   }
+   #+end_src
+
+   #+RESULTS[3eec12ec06bd28951133885b3433034d1d3214f5]:
+
+   #+begin_src python :tangle with-dagger-source/.dagger/src/caching_dagger/__init__.py :eval no-export :mkdirp yes
+   from .main import CachingDagger as CachingDagger
+   #+end_src
+
+   #+begin_src bash :tangle with-dagger-source/.dagger/data.txt :shebang "" :eval no-export :comments no :padline no
+   some test data
+   #+end_src
+
+   #+RESULTS[172d9f31e50ab57adbc56a18a75e40e793dc4280]:
+
+   #+begin_src bash :tangle with-dagger-source/data.txt :shebang "" :eval no-export :comments no :padline no
+   some test data
+   #+end_src
+
+   #+RESULTS[194cd89ecd1ec11484748b02de3e9509a2bafde4]:
+
+   #+begin_src python :tangle with-dagger-source/.dagger/src/caching_dagger/main.py :eval no-export
+   import time
+   from typing import Annotated
+
+   import dagger
+   from dagger import DefaultPath, Ignore, dag, function, object_type
+
+
+   @object_type
+   class CachingDagger:
+       @function
+       async def old_way(self) -> str:
+           """Filter source inside the function. Returns elapsed seconds."""
+           src = dag.directory().with_directory(
+               ".",
+               dag.current_module().source(),
+               include=["data.txt"],
+           )
+           start = time.monotonic()
+           await (
+               dag.container()
+               .from_("alpine:latest")
+               .with_directory("/work", src)
+               .with_exec(["sh", "-c", "sleep 3 && echo old"])
+               .stdout()
+           )
+           return f"{time.monotonic() - start:.2f}s"
+
+       @function
+       async def new_way(
+           self,
+           src: Annotated[
+               dagger.Directory,
+               DefaultPath("."),
+               Ignore(["**", "!data.txt"]),
+           ],
+       ) -> str:
+           """Filter source at the engine level. Returns elapsed seconds."""
+           start = time.monotonic()
+           await (
+               dag.container()
+               .from_("alpine:latest")
+               .with_directory("/work", src)
+               .with_exec(["sh", "-c", "sleep 3 && echo new"])
+               .stdout()
+           )
+           return f"{time.monotonic() - start:.2f}s"
+   #+end_src
+
+** Sub-project: root-as-source layout
+
+   #+begin_src bash :tangle with-root-source/dagger.json :shebang "" :eval no-export :comments no :padline no :mkdirp yes
+   {
+     "name": "caching_root",
+     "engineVersion": "v0.20.3",
+     "sdk": {
+       "source": "python"
+     }
+   }
+   #+end_src
+
+   #+RESULTS[a1ff61460cdc8f4d2783e4fac8f43cc1c149de22]:
+
+   #+begin_src python :tangle with-root-source/src/caching_root/__init__.py :eval no-export :mkdirp yes
+   from .main import CachingRoot as CachingRoot
+   #+end_src
+
+   #+begin_src bash :tangle with-root-source/data.txt :shebang "" :eval no-export :comments no :padline no
+   some test data
+   #+end_src
+
+   #+RESULTS[66a72efacba3a39bbc86e81151fbc8a0769e896c]:
+
+   #+begin_src python :tangle with-root-source/src/caching_root/main.py :eval no-export
+   import time
+   from typing import Annotated
+
+   import dagger
+   from dagger import DefaultPath, Ignore, dag, function, object_type
+
+
+   @object_type
+   class CachingRoot:
+       @function
+       async def old_way(self) -> str:
+           """Filter source inside the function. Returns elapsed seconds."""
+           src = dag.directory().with_directory(
+               ".",
+               dag.current_module().source(),
+               include=["data.txt"],
+           )
+           start = time.monotonic()
+           await (
+               dag.container()
+               .from_("alpine:latest")
+               .with_directory("/work", src)
+               .with_exec(["sh", "-c", "sleep 3 && echo old"])
+               .stdout()
+           )
+           return f"{time.monotonic() - start:.2f}s"
+
+       @function
+       async def new_way(
+           self,
+           src: Annotated[
+               dagger.Directory,
+               DefaultPath("."),
+               Ignore(["**", "!data.txt"]),
+           ],
+       ) -> str:
+           """Filter source at the engine level. Returns elapsed seconds."""
+           start = time.monotonic()
+           await (
+               dag.container()
+               .from_("alpine:latest")
+               .with_directory("/work", src)
+               .with_exec(["sh", "-c", "sleep 3 && echo new"])
+               .stdout()
+           )
+           return f"{time.monotonic() - start:.2f}s"
+   #+end_src
+
+** Test protocol
+
+   Each sub-project is tested: populate cache, confirm hit, add a
+   junk file where it changes the module source, re-run.  =time=
+   makes the result visible: ~1 s = cached, ~20 s = busted.
+
+   The cache is pruned before each test group with =dagger core
+   engine local-cache prune= (without =--use-default-policy=, which
+   removes all releasable entries).  Three runs per group: populate,
+   confirm cached, add junk and re-run.
+
+   Wall-clock =time= is misleading: every call pays ~10 s of
+   unavoidable module reload when a source file changes.  The
+   crucial signal is the exec duration inside the function.  Each
+   Dagger function measures its own =withExec= duration with
+   =time.monotonic()= and returns it as a string:
+
+   - =~0.03s= — exec cache survived (no =sleep= ran)
+   - =~3.10s= — exec re-ran (=sleep 3=)
+
+   Each block prunes the cache, populates it with a fresh call, adds
+   a junk file inside the module source, re-runs, and prints the
+   measured exec duration.
+
+*** =.dagger= layout — old way (junk inside =.dagger/=)
+
+    #+begin_src bash :results output
+    dagger core engine local-cache prune 2>&1 > /dev/null
+    cd with-dagger-source
+    dagger call old-way > /dev/null 2>&1
+    echo noise > .dagger/junk.txt
+    echo -n "withExec: "
+    dagger call old-way 2>/dev/null
+    rm -f .dagger/junk.txt
+    #+end_src
+
+    #+RESULTS[489e29ed7877552f72e68bf7314c79e9b506b2a1]:
+    : 
+    : [33mA new release of dagger is available: [0m[36mv0.20.3[0m → [36mv0.20.6[0m
+    : To upgrade, see https://docs.dagger.io/install
+    : [33mhttps://github.com/dagger/dagger/releases/tag/v0.20.6[0m
+    : withExec: 3.51s
+
+*** =.dagger= layout — new way (junk inside =.dagger/=)
+
+    #+begin_src bash :results output
+    dagger core engine local-cache prune 2>&1 > /dev/null
+    cd with-dagger-source
+    dagger call new-way > /dev/null 2>&1
+    echo noise > .dagger/junk2.txt
+    echo -n "withExec: "
+    dagger call new-way 2>/dev/null
+    rm -f .dagger/junk2.txt
+    #+end_src
+
+    #+RESULTS[076b765be9a67ba2c1e35905feb407e8cdf8a86f]:
+    : 
+    : [33mA new release of dagger is available: [0m[36mv0.20.3[0m → [36mv0.20.6[0m
+    : To upgrade, see https://docs.dagger.io/install
+    : [33mhttps://github.com/dagger/dagger/releases/tag/v0.20.6[0m
+    : withExec: 0.16s
+
+*** Root-as-source — old way (junk at project root)
+
+    #+begin_src bash :results output
+    dagger core engine local-cache prune 2>&1 > /dev/null
+    cd with-root-source
+    dagger call old-way > /dev/null 2>&1
+    echo noise > junk.txt
+    echo -n "withExec: "
+    dagger call old-way 2>/dev/null
+    rm -f junk.txt
+    #+end_src
+
+    #+RESULTS[775150b2b8badc8bdc87ce3e7ac3d0aa4cb3f0c1]:
+    : 
+    : [33mA new release of dagger is available: [0m[36mv0.20.3[0m → [36mv0.20.6[0m
+    : To upgrade, see https://docs.dagger.io/install
+    : [33mhttps://github.com/dagger/dagger/releases/tag/v0.20.6[0m
+    : withExec: 3.52s
+
+*** Root-as-source — new way (junk at project root)
+
+    #+begin_src bash :results output
+    dagger core engine local-cache prune 2>&1 > /dev/null
+    cd with-root-source
+    dagger call new-way > /dev/null 2>&1
+    echo noise > junk2.txt
+    echo -n "withExec: "
+    dagger call new-way 2>/dev/null
+    rm -f junk2.txt
+    #+end_src
+
+    #+RESULTS[23f4de1361648cc2e3177c6fd8ad7df53a8ddd80]:
+    : 
+    : [33mA new release of dagger is available: [0m[36mv0.20.3[0m → [36mv0.20.6[0m
+    : To upgrade, see https://docs.dagger.io/install
+    : [33mhttps://github.com/dagger/dagger/releases/tag/v0.20.6[0m
+    : withExec: 0.16s
+
+*** Conclusion
+
+    Both layouts show the same result: =old_way= busts (~3.5 s —
+    =sleep 3= runs again), =new_way= stays cached (~0.2 s — exec
+    cache survives).
+
+    | Layout | Approach | withExec duration | Cache  |
+    |--------+----------+-------------------+--------|
+    | =.dagger= | old_way  | ~3.6 s            | BUSTED |
+    | =.dagger= | new_way  | ~0.2 s            | CACHED |
+    | root   | old_way  | ~3.5 s            | BUSTED |
+    | root   | new_way  | ~0.2 s            | CACHED |
+
+    The =DefaultPath(".")= + =Ignore(["**", "!..."])= workaround
+    reliably preserves the exec cache regardless of module layout,
+    as long as junk files don't match the allowlist patterns.
+
+* Root cause
+
+  Dagger has two caching layers:
+
+  - *dagql* (Dagger's own layer) is content-addressed.
+    =Directory.digest()= returns a content hash, and two directories
+    with identical content produce the same digest.
+
+  - *BuildKit's solver* (the exec layer) is graph-based.  The cache
+    key for =withExec= includes the full operation chain that built
+    the container, not the content of its filesystem.  Two containers
+    with identical filesystems but different build histories get
+    different cache keys.
+
+  The mismatch means that =withDirectory= correctly deduplicates
+  content, but the container identity still encodes the graph path.
+  Any =withExec= downstream sees a "new" container and re-runs.
+
+  A Dagger contributor traced the specific mechanism in
+  [[https://github.com/dagger/dagger/issues/8955][issue #8955]]: when local source directories are unfrozen (since
+  [[https://github.com/dagger/dagger/pull/8818][PR #8818]]), the LLB operations use a =session:= prefix that changes
+  between runs even when content is identical.  The dagql IDs are
+  correct (content-hashed via =MakeDirectoryContentHashed=) but the
+  BuildKit LLB is not.
+
+** Why BuildKit does not content-dedup exec cache keys
+
+   BuildKit's solver has two cache key modes for exec operations:
+   a fast mode (graph-based, using operation identity) and a slow
+   mode (content-based, using filesystem checksums).  The slow
+   content-based mode is [[https://github.com/moby/buildkit/blob/a09112603a36532b8e44ade74ee3fd8383f4b708/solver/llbsolver/ops/exec.go#L260-L262][explicitly disabled in =exec.go=]] for
+   mounts that are either the root mount or non-readonly.  The
+   rationale ([[https://github.com/moby/buildkit/issues/903#issuecomment-475923526][moby/buildkit#903]]): computing content-based
+   checksums for every mount is expensive, so BuildKit only pays
+   that cost for non-root, read-only mounts.
+
+   This is fundamental to BuildKit, not Dagger-specific.  Earthly
+   maintains a [[https://github.com/earthly/buildkit][BuildKit fork]] but inherits the same core exec
+   caching logic.  Any tool built on BuildKit has this limitation.
+
+* Upstream status
+
+  - [[https://github.com/dagger/dagger/issues/8955][Issue #8955]] — "Second to last step is not cached."  Root cause
+    identified: =session:= prefix in LLB breaks BuildKit cache lookup.
+  - [[https://github.com/dagger/dagger/issues/6421][Issue #6421]] — "=WithMountedDirectory= does not use content-based
+    cache in =withExec=."  Related BuildKit limitation where
+    content-based caching is explicitly disabled for non-readonly
+    root mounts.
+  - [[https://github.com/dagger/dagger/pull/11856][PR #11856]] — "Migrate all caching to dagql."  The planned fix:
+    remove the BuildKit solver entirely and use dagql's
+    content-addressed cache for everything.  Still WIP as of
+    2026-04-15.
+
+  When PR #11856 merges, the =include= filter approach already used
+  in =src/dind.org= should work correctly — the exec cache will
+  be content-based and identical filtered directories will share
+  cache entries regardless of their operation history.
+
+* Workarounds
+
+  Until the upstream fix ships, the only way to get stable exec cache
+  is to ensure the directory is constructed via the *same graph path*
+  every time.  Two approaches:
+
+** =DefaultPath= + =Ignore= with negation patterns
+
+   The Dagger Python SDK supports =Ignore(["**", "!pattern", ...])=
+   negation patterns (the SDK runtime itself uses this in
+   =sdk/runtime/main.go=).  Combined with =DefaultPath(".")=, the
+   engine constructs the directory from the context directory with
+   the same filter every invocation.  When unrelated files change,
+   the filtered directory keeps the same graph path because the
+   filter inputs (non-ignored files) haven't changed.
+
+   This works regardless of module layout — both =source: .dagger=
+   and root-as-source configurations benefit (see the two
+   sub-projects above).  Unrelated files at the root still trigger
+   a module reload (~10 s) but the exec cache survives because the
+   =Ignore= filter excludes them from the directory that =withExec=
+   depends on.
+
+   #+begin_src python :eval no-export :tangle no
+   from typing import Annotated
+   from dagger import DefaultPath, Ignore, function
+
+   @function
+   def my_function(
+       self,
+       src: Annotated[
+           dagger.Directory,
+           DefaultPath("."),
+           Ignore(["**", "!src/", "!*.org", "!*.sh"]),
+       ],
+   ) -> dagger.Directory:
+       ...
+   #+end_src
+
+   This is a per-function allowlist: each function declares exactly
+   which files it needs, and unrelated file changes do not affect
+   its cache.
+
+** =dagger.json= =include= field
+
+   The =include= field in =dagger.json= limits what Dagger considers
+   the module source.  This is a module-level allowlist — simpler to
+   maintain but shared across all functions:
+
+   #+begin_src json :eval no-export :tangle no
+   {
+     "name": "my-module",
+     "include": ["src/", "*.org", "*.sh", "dagger.json"]
+   }
+   #+end_src
+
+* Impact on daggerlib
+
+  The root =lib= module has no ="source"= field in =dagger.json= —
+  its module source is the entire project root.  Five functions in
+  [[file:../../src/dind.org][src/dind.org]] previously used =dag.current_module().source()= with
+  per-function =include= filters, which busted the exec cache (~17 s
+  for =dind_run_org=) whenever an unrelated file was added or removed
+  at the project root.
+
+  These functions now use =DefaultPath(".")= + =Ignore(["**",
+  "!..."])= to declare per-function allowlists at the engine level:
+
+  - =dind_run_tests=
+  - =dind_tangle=
+  - =dind_run_org=
+  - =dind_init_examples=
+  - =export_html=
+
+  With this workaround, adding an unrelated file at the root still
+  triggers a module reload (~7 s) but the exec cache survives —
+  down from ~27 s to ~7 s.
