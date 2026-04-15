@@ -6,18 +6,10 @@ from dagger import dag, function
 _DIND_DNS_ENTRYPOINT = """\
 #!/bin/sh
 DNS_SERVER=$(awk '/^nameserver/{print $2; exit}' /etc/resolv.conf)
-(
-    i=0
-    while [ $i -lt 30 ]; do
-        docker info >/dev/null 2>&1 && break
-        i=$((i+1))
-        sleep 0.2
-    done
-    iptables -t nat -A PREROUTING -p udp -d 172.17.0.1 --dport 53 \
-        -j DNAT --to-destination "$DNS_SERVER:53" 2>/dev/null || true
-    iptables -t nat -A PREROUTING -p tcp -d 172.17.0.1 --dport 53 \
-        -j DNAT --to-destination "$DNS_SERVER:53" 2>/dev/null || true
-) &
+iptables -t nat -A PREROUTING -p udp -d 172.17.0.1 --dport 53 \
+    -j DNAT --to-destination "$DNS_SERVER:53" 2>/dev/null || true
+iptables -t nat -A PREROUTING -p tcp -d 172.17.0.1 --dport 53 \
+    -j DNAT --to-destination "$DNS_SERVER:53" 2>/dev/null || true
 exec dockerd-entrypoint-orig.sh "$@"
 """
 

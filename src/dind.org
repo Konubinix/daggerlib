@@ -37,18 +37,10 @@ from dagger import dag, function
 _DIND_DNS_ENTRYPOINT = """\
 #!/bin/sh
 DNS_SERVER=$(awk '/^nameserver/{print $2; exit}' /etc/resolv.conf)
-(
-    i=0
-    while [ $i -lt 30 ]; do
-        docker info >/dev/null 2>&1 && break
-        i=$((i+1))
-        sleep 0.2
-    done
-    iptables -t nat -A PREROUTING -p udp -d 172.17.0.1 --dport 53 \
-        -j DNAT --to-destination "$DNS_SERVER:53" 2>/dev/null || true
-    iptables -t nat -A PREROUTING -p tcp -d 172.17.0.1 --dport 53 \
-        -j DNAT --to-destination "$DNS_SERVER:53" 2>/dev/null || true
-) &
+iptables -t nat -A PREROUTING -p udp -d 172.17.0.1 --dport 53 \
+    -j DNAT --to-destination "$DNS_SERVER:53" 2>/dev/null || true
+iptables -t nat -A PREROUTING -p tcp -d 172.17.0.1 --dport 53 \
+    -j DNAT --to-destination "$DNS_SERVER:53" 2>/dev/null || true
 exec dockerd-entrypoint-orig.sh "$@"
 """
 
@@ -86,8 +78,8 @@ class DindMixin:
   :END:
 
   The =docker:dind= image handles cgroup setup, storage driver
-  selection, and dockerd lifecycle. The wrapper script adds DNS
-  forwarding and retry-on-corruption logic on top.
+  selection, and dockerd lifecycle.  The wrapper script adds DNS
+  forwarding on top.
 
   TLS is explicitly disabled (=DOCKER_TLS_CERTDIR= set to an empty
   string) because the daemon only talks to the client container inside
@@ -95,6 +87,30 @@ class DindMixin:
   be a hard failure."  *This is safe to ignore:* Dagger owns this
   daemon and will update their images when Docker enforces TLS.  Every
   Dagger user sees the same warning.
+
+  The stock =dockerd-entrypoint.sh= emits a few warnings on
+  nf_tables-only kernels (no legacy iptables modules loaded):
+
+  #+begin_example
+  cat: can't open '/proc/net/arp_tables_names': No such file or directory
+  iptables v1.8.11 (nf_tables)
+  sed: write error
+  #+end_example
+
+  These come from Docker's own iptables backend detection logic, not
+  from our wrapper.  The entrypoint probes
+  =/proc/net/{ip,ip6,arp}_tables_names= to decide whether to use
+  legacy iptables or nf_tables, then unconditionally prints =iptables
+  --version=.  On kernels that only have =nf_tables= loaded (no
+  =ip_tables= / =arp_tables= modules), the probes fail and the
+  =modprobe= fallback produces the =sed= error.  Reproducible with
+  plain Docker — no Dagger involved:
+
+  : docker run --rm --privileged docker:27-dind sh -c 'dockerd-entrypoint.sh dockerd 2>&1 | head -10'
+
+  This is harmless: the nf_tables fallback works correctly.  Upgrading
+  to =docker:28-dind= does not help — the same entrypoint code is
+  present.
 
   #+NAME: dind-service
   #+begin_src python
