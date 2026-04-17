@@ -1,9 +1,9 @@
 {
-  "alpine:3.23": "sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659",
+  "alpine:3.23": "sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11",
   "debian:13.2-slim": "sha256:4bcb9db66237237d03b55b969271728dd3d955eaaa254b9db8a3db94550b1885",
-  "ubuntu:24.04": "sha256:84e77dee7d1bc93fb029a45e3c6cb9d8aa4831ccfcc7103d36e876938d28895b",
+  "ubuntu:24.04": "sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b",
   "docker:27-dind": "sha256:aa3df78ecf320f5fafdce71c659f1629e96e9de0968305fe1de670e0ca9176ce",
   "gcr.io/distroless/python3-debian13": "sha256:ed3a4beb46f8f8baac068743ba1b1f95ea3f793422129cf6dd23967f779b6018",
   "gcr.io/distroless/static-debian13": "sha256:47b2d72ff90843eb8a768b5c2f89b40741843b639d065b9b937b07cd59b479c6",
-  "python:3.12-alpine": "sha256:7747d47f92cfca63a6e2b50275e23dba8407c30d8ae929a88ddd49a5d3f2d331"
+  "python:3.12-alpine": "sha256:236173eb74001afe2f60862de935b74fcbd00adfca247b2c27051a70a6a39a2d"
 }
