@@ -1,6 +1,8 @@
 # [[file:../dind.org::+begin_src python :tangle lib/dind.py :noweb yes][No heading:1]]
+from typing import Annotated
+
 import dagger
-from dagger import dag, function
+from dagger import DefaultPath, Ignore, dag, function
 
 
 _DIND_DNS_ENTRYPOINT = """\
@@ -91,7 +93,27 @@ class DindMixin:
         )
 
     @function
-    def dind_run_tests(self) -> dagger.Container:
+    def dind_run_tests(
+        self,
+        src: Annotated[
+            dagger.Directory,
+            DefaultPath("."),
+            Ignore(
+                [
+                    "**",
+                    "!src/lib/",
+                    "!src/ralph.yml",
+                    "!sdk/",
+                    "!tests/",
+                    "!examples/",
+                    "!dagger.json",
+                    "!.daggerignore",
+                    "!pyproject.toml",
+                    "!test-host.sh",
+                ]
+            ),
+        ],
+    ) -> dagger.Container:
         """Run the project test suite inside Docker-in-Docker (dogfooding).
 
         Builds a test-ready container from the DinD base, installs Python,
@@ -99,22 +121,6 @@ class DindMixin:
         ./test-host.sh with dockerd available.
         Source is mounted last so package installs are cached.
         """
-        src = dag.directory().with_directory(
-            ".",
-            dag.current_module().source(),
-            include=[
-                "src/lib/",
-                "src/ralph.yml",
-                "sdk/",
-                "tests/",
-                "examples/",
-                "dagger.json",
-                ".daggerignore",
-                "pyproject.toml",
-                "test-host.sh",
-            ],
-        )
-
         ctr = self.dind_container()
         ctr = (
             ctr.with_exec(["apt-get", "update"])
@@ -234,22 +240,28 @@ class DindMixin:
         )
 
     @function
-    def dind_tangle(self) -> dagger.Directory:
+    def dind_tangle(
+        self,
+        src: Annotated[
+            dagger.Directory,
+            DefaultPath("."),
+            Ignore(
+                [
+                    "**",
+                    "!src/",
+                    "!tests/",
+                    "!examples/",
+                    "!studies/",
+                    "!.clk/",
+                    "!*.org",
+                    "!*.sh",
+                    "!*.el",
+                    "!dagger.json",
+                ]
+            ),
+        ],
+    ) -> dagger.Directory:
         """Tangle org files inside a container and return only the modified files."""
-        src = dag.directory().with_directory(
-            ".",
-            dag.current_module().source(),
-            include=[
-                "src/",
-                "tests/",
-                "examples/",
-                ".clk/",
-                "*.org",
-                "*.sh",
-                "*.el",
-                "dagger.json",
-            ],
-        )
         ctr = self.emacs_container(src=src)
         ctr = ctr.with_mounted_cache(
             "/work/.tangle-deps", dag.cache_volume("tangle-deps")
@@ -261,6 +273,28 @@ class DindMixin:
     @function
     def dind_run_org(
         self,
+        src: Annotated[
+            dagger.Directory,
+            DefaultPath("."),
+            Ignore(
+                [
+                    "**",
+                    "!src/",
+                    "!examples/",
+                    "!studies/",
+                    "!tests/dagger",
+                    "!tests/ralph-log-filter",
+                    "!tests/ralph_log_sample.txt",
+                    "!*.org",
+                    "!*.sh",
+                    "!*.el",
+                    "!dagger.json",
+                    "!.daggerignore",
+                    "!pyproject.toml",
+                    "!sdk/",
+                ]
+            ),
+        ],
         files: list[str] | None = None,
         no_cache: bool = False,
     ) -> dagger.Directory:
@@ -268,24 +302,6 @@ class DindMixin:
 
         If files is given, only those org files are processed.
         """
-        src = dag.directory().with_directory(
-            ".",
-            dag.current_module().source(),
-            include=[
-                "src/",
-                "examples/",
-                "tests/dagger",
-                "tests/ralph-log-filter",
-                "tests/ralph_log_sample.txt",
-                "*.org",
-                "*.sh",
-                "*.el",
-                "dagger.json",
-                ".daggerignore",
-                "pyproject.toml",
-                "sdk/",
-            ],
-        )
         ctr = self.dind_emacs_container()
         ctr = (
             ctr.with_directory("/work", src)
@@ -304,24 +320,27 @@ class DindMixin:
     @function
     def dind_init_examples(
         self,
+        src: Annotated[
+            dagger.Directory,
+            DefaultPath("."),
+            Ignore(
+                [
+                    "**",
+                    "!src/lib/",
+                    "!examples/",
+                    "!*.sh",
+                    "!*.el",
+                    "!dagger.json",
+                    "!.daggerignore",
+                    "!pyproject.toml",
+                    "!sdk/",
+                ]
+            ),
+        ],
         from_scratch: bool = False,
         no_cache: bool = False,
     ) -> dagger.Directory:
         """Init example modules inside a DinD container and return only the modified files."""
-        src = dag.directory().with_directory(
-            ".",
-            dag.current_module().source(),
-            include=[
-                "src/lib/",
-                "examples/",
-                "*.sh",
-                "*.el",
-                "dagger.json",
-                ".daggerignore",
-                "pyproject.toml",
-                "sdk/",
-            ],
-        )
         ctr = self.dind_emacs_container()
         ctr = (
             ctr.with_directory("/work", src)
@@ -338,20 +357,25 @@ class DindMixin:
         return before.diff(after)
 
     @function
-    def export_html(self) -> dagger.Directory:
+    def export_html(
+        self,
+        src: Annotated[
+            dagger.Directory,
+            DefaultPath("."),
+            Ignore(
+                [
+                    "**",
+                    "!src/*.org",
+                    "!tests/testing.org",
+                    "!examples/*/readme.org",
+                    "!*.org",
+                    "!*.sh",
+                    "!*.el",
+                ]
+            ),
+        ],
+    ) -> dagger.Directory:
         """Export org files to HTML with noweb expansion for GitHub Pages."""
-        src = dag.directory().with_directory(
-            ".",
-            dag.current_module().source(),
-            include=[
-                "src/*.org",
-                "tests/testing.org",
-                "examples/*/readme.org",
-                "*.org",
-                "*.sh",
-                "*.el",
-            ],
-        )
         ctr = self.emacs_container(src=src)
         ctr = ctr.with_mounted_cache(
             "/work/.tangle-deps", dag.cache_volume("tangle-deps")
