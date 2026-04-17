@@ -287,17 +287,28 @@ links to the upstream fix.
    from .main import CachingDagger as CachingDagger
    #+end_src
 
-   #+begin_src bash :tangle with-dagger-source/.dagger/data.txt :shebang "" :eval no-export :comments no :padline no
+   Because =source: .dagger= isolates the module source from the
+   project root, the two approaches read =data.txt= from two different
+   places and we need a copy in each:
+
+   - =old_way= reads =dag.current_module().source()= — the module
+     source, i.e. =.dagger/=, so it needs =.dagger/data.txt=.
+   - =new_way= reads =DefaultPath(".")= — the caller's context
+     directory (where =dagger.json= lives), so it needs a root-level
+     =data.txt=.
+
+   #+name: with-dagger-source-data
+   #+begin_src bash :eval no 
    some test data
    #+end_src
 
-   #+RESULTS[172d9f31e50ab57adbc56a18a75e40e793dc4280]:
-
-   #+begin_src bash :tangle with-dagger-source/data.txt :shebang "" :eval no-export :comments no :padline no
-   some test data
+   #+begin_src bash :tangle with-dagger-source/.dagger/data.txt :shebang "" :eval no :comments no :padline no :noweb yes :exports none
+   <<with-dagger-source-data>>
    #+end_src
 
-   #+RESULTS[194cd89ecd1ec11484748b02de3e9509a2bafde4]:
+   #+begin_src bash :tangle with-dagger-source/data.txt :shebang "" :eval no :comments no :padline no :noweb yes :exports none
+   <<with-dagger-source-data>>
+   #+end_src
 
    #+begin_src python :tangle with-dagger-source/.dagger/src/caching_dagger/main.py :eval no-export
    import time
