@@ -60,5 +60,13 @@
               (daggerlib--write-expected-files files)
               files))
 
+;; Strip trailing whitespace in the per-block tangle buffer.  Doing this
+;; inside the body-hook (instead of `sed -i' post-emacs) keeps the tangle
+;; buffer byte-identical to the on-disk file, so org-babel-tangle's
+;; compare-buffer-substrings (ob-tangle.el:320) skips write-region — no
+;; mtime change, Dagger's Directory.diff stays empty, downstream caches
+;; (notably ./test.sh) survive across runs.
+(add-hook 'org-babel-tangle-body-hook #'delete-trailing-whitespace)
+
 ;;; tangle.el ends here
 ;; Tangle configuration:1 ends here

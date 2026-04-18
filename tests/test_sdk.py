@@ -14,7 +14,10 @@ def _collect(commands_dir, cwd):
     if not commands_dir.exists():
         return []
     expected_dir = commands_dir.parent / "expected"
-    return [(f, expected_dir, cwd) for f in sorted(commands_dir.glob("*"))]
+    return [
+        (f, expected_dir, cwd)
+        for f in sorted(commands_dir.glob("*"))
+    ]
 
 
 def _test_id(entry):
@@ -56,8 +59,7 @@ def test_command(tmp_path, cmd_file, expected_dir, cwd):
     expected_file = expected_dir / cmd_file.name
     expected = expected_file.read_text().rstrip("\n") if expected_file.exists() else ""
     assert result.stdout.rstrip("\n") == expected, (
-        f"{cmd_file.name}: got {result.stdout.rstrip(chr(10))!r}, expected {expected!r}"
+        f"{cmd_file.name}: got {result.stdout.rstrip(chr(10))!r},"
+        f" expected {expected!r}"
     )
-
-
 # Test fixtures:1 ends here

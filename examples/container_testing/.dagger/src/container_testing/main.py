@@ -11,8 +11,7 @@ class ContainerTesting:
     async def test_kind(self) -> str:
         """Run a mocked Kind workflow inside Docker-in-Docker."""
         return await (
-            dag.lib()
-            .dind_with_docker(
+            dag.lib().dind_with_docker(
                 cmd="kind() { echo 'Creating cluster...'; echo \"Cluster 'test' created.\"; };"
                 " kubectl() { echo 'NAME            STATUS   ROLES           AGE';"
                 " echo 'test-node       Ready    control-plane   1m'; };"
@@ -21,6 +20,4 @@ class ContainerTesting:
             )
             .stdout()
         )
-
-
 # No heading:3 ends here

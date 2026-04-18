@@ -4,6 +4,7 @@ from dagger import dag, function
 
 
 class PipToolsMixin:
+
     @function
     def pip_tools(self) -> dagger.Container:
         """Python Alpine with pip-tools and a default user."""
@@ -14,6 +15,4 @@ class PipToolsMixin:
     @property
     def _pip_tools_image(self) -> str:
         return f"python:{self.pip_tools_python_version}-alpine"
-
-
 # No heading:1 ends here

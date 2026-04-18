@@ -1,6 +1,5 @@
 # [[file:readme.org::+begin_src python :tangle collector.py][No heading:1]]
 """Scan a directory for .log files and print a JSON summary."""
-
 import json
 import sys
 from pathlib import Path

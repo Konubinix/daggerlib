@@ -40,6 +40,4 @@ class Lib(
     @property
     def debian_tag(self) -> str:
         return f"{self.debian_version}.{self.debian_min_version}-slim"
-
-
 # No heading:2 ends here

@@ -4,20 +4,18 @@ from dagger import dag, function
 
 
 class AlpineMixin:
+
     @function
     def alpine_set_tz(self, ctr: dagger.Container) -> dagger.Container:
         """Set timezone on an Alpine container (uses Lib.timezone)."""
         tz = self.timezone
-        return ctr.with_exec(
-            [
-                "sh",
-                "-c",
-                "apk --quiet add --update tzdata"
-                f" && cp /usr/share/zoneinfo/{tz} /etc/localtime"
-                f' && echo "{tz}" > /etc/timezone'
-                " && apk --quiet del tzdata",
-            ]
-        )
+        return ctr.with_exec([
+            "sh", "-c",
+            "apk --quiet add --update tzdata"
+            f" && cp /usr/share/zoneinfo/{tz} /etc/localtime"
+            f' && echo "{tz}" > /etc/timezone'
+            " && apk --quiet del tzdata",
+        ])
 
     @function
     def alpine(self, distro_packages: list[str] = ()) -> dagger.Container:
@@ -52,9 +50,7 @@ class AlpineMixin:
     @function
     def alpine_python(self, distro_packages: list[str] = ()) -> dagger.Container:
         """Alpine with python3 and pip."""
-        return self.alpine(
-            distro_packages=["python3", "py3-pip"] + list(distro_packages)
-        )
+        return self.alpine(distro_packages=["python3", "py3-pip"] + list(distro_packages))
 
     @function
     def alpine_python_user_venv(
@@ -66,13 +62,9 @@ class AlpineMixin:
     ) -> dagger.Container:
         """Alpine with python, user, and a virtualenv."""
         ctr = self.alpine_python(distro_packages=distro_packages)
-        return self.python_user_venv(
-            ctr, groups=groups, pip_packages=pip_packages, work_dir=work_dir
-        )
+        return self.python_user_venv(ctr, groups=groups, pip_packages=pip_packages, work_dir=work_dir)
 
     @property
     def _alpine_image(self) -> str:
         return f"alpine:{self.alpine_version}"
-
-
 # No heading:1 ends here

@@ -6,36 +6,33 @@ from dagger import dag, function
 
 
 class DebianMixin:
+
     @function
     def debian_no_auto_install(self, ctr: dagger.Container) -> dagger.Container:
         """Disable apt recommends and suggests."""
-        return ctr.with_exec(
-            [
-                "sh",
-                "-c",
-                "echo 'APT::Install-Recommends \"0\";' > /etc/apt/apt.conf.d/01norecommend"
-                " && "
-                "echo 'APT::Install-Suggests \"0\";' >> /etc/apt/apt.conf.d/01norecommend",
-            ]
-        )
+        return ctr.with_exec([
+            "sh", "-c",
+            'echo \'APT::Install-Recommends "0";\' > /etc/apt/apt.conf.d/01norecommend'
+            " && "
+            'echo \'APT::Install-Suggests "0";\' >> /etc/apt/apt.conf.d/01norecommend',
+        ])
 
     @function
     def debian_set_tz(self, ctr: dagger.Container) -> dagger.Container:
         """Set timezone on a Debian container (uses Lib.timezone)."""
-        return ctr.with_exec(["rm", "/etc/localtime"]).with_exec(
-            ["ln", "-sf", f"/usr/share/zoneinfo/{self.timezone}", "/etc/localtime"]
+        return (
+            ctr
+            .with_exec(["rm", "/etc/localtime"])
+            .with_exec(["ln", "-sf", f"/usr/share/zoneinfo/{self.timezone}", "/etc/localtime"])
         )
 
     @function
     def debian_apt_cleanup(self, ctr: dagger.Container) -> dagger.Container:
         """Clean apt caches."""
-        return ctr.with_exec(
-            [
-                "sh",
-                "-c",
-                "apt-get --quiet clean && rm -rf /var/lib/apt/lists/*",
-            ]
-        )
+        return ctr.with_exec([
+            "sh", "-c",
+            "apt-get --quiet clean && rm -rf /var/lib/apt/lists/*",
+        ])
 
     @function
     def debian(self, distro_packages: list[str] = ()) -> dagger.Container:
@@ -45,15 +42,12 @@ class DebianMixin:
         ctr = self.debian_set_tz(ctr)
         if distro_packages:
             packages_str = shlex.join(distro_packages)
-            ctr = ctr.with_exec(
-                [
-                    "sh",
-                    "-c",
-                    "{ apt-get --quiet update"
-                    f" && apt-get --quiet install --yes {packages_str}"
-                    " ; } > /tmp/log 2>&1 || { cat /tmp/log; exit 1; }",
-                ]
-            )
+            ctr = ctr.with_exec([
+                "sh", "-c",
+                "{ apt-get --quiet update"
+                f" && apt-get --quiet install --yes {packages_str}"
+                " ; } > /tmp/log 2>&1 || { cat /tmp/log; exit 1; }",
+            ])
             ctr = self.debian_apt_cleanup(ctr)
         return ctr
 
@@ -73,9 +67,7 @@ class DebianMixin:
     ) -> dagger.Container:
         """Debian with python, user, and a virtualenv."""
         ctr = self.debian(distro_packages=["python3-venv"] + list(distro_packages))
-        return self.python_user_venv(
-            ctr, groups=groups, pip_packages=pip_packages, work_dir=work_dir
-        )
+        return self.python_user_venv(ctr, groups=groups, pip_packages=pip_packages, work_dir=work_dir)
 
     @function
     def debian_localtime(self) -> dagger.File:
@@ -85,6 +77,4 @@ class DebianMixin:
     @property
     def _debian_image(self) -> str:
         return f"debian:{self.debian_tag}"
-
-
 # No heading:1 ends here

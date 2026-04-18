@@ -4,6 +4,7 @@ from dagger import function
 
 
 class PythonMixin:
+
     @function
     def python_venv(
         self,
@@ -12,25 +13,12 @@ class PythonMixin:
         pip_packages: list[str] = (),
     ) -> dagger.Container:
         """Create a Python venv with --system-site-packages and optionally install packages."""
-        ctr = ctr.with_exec(
-            [
-                "python3",
-                "-m",
-                "venv",
-                "--system-site-packages",
-                f"{base}/venv",
-            ]
-        ).with_env_variable("PATH", f"{base}/venv/bin:$PATH", expand=True)
+        ctr = ctr.with_exec([
+            "python3", "-m", "venv", "--system-site-packages", f"{base}/venv",
+        ]).with_env_variable("PATH", f"{base}/venv/bin:$PATH", expand=True)
         if pip_packages:
             ctr = ctr.with_exec(
-                [
-                    f"{base}/venv/bin/python",
-                    "-m",
-                    "pip",
-                    "--quiet",
-                    "install",
-                    "--upgrade",
-                ]
+                [f"{base}/venv/bin/python", "-m", "pip", "--quiet", "install", "--upgrade"]
                 + list(pip_packages)
             )
         return ctr
@@ -47,6 +35,4 @@ class PythonMixin:
         ctr = self.use_user(ctr, groups=groups)
         ctr = ctr.with_workdir(work_dir)
         return self.python_venv(ctr, base=work_dir, pip_packages=pip_packages)
-
-
 # No heading:1 ends here

@@ -16,6 +16,7 @@ def _load_pins() -> dict[str, str]:
 
 
 class PinsMixin:
+
     def pinned(self, tag: str) -> str:
         """Return tag@digest if pinned, else bare tag."""
         digest = _load_pins().get(tag)
@@ -45,11 +46,5 @@ class PinsMixin:
             digest = await ctr.with_exec(["crane", "digest", tag]).stdout()
             pins[tag] = digest.strip()
         content = json.dumps(pins, indent=2) + "\n"
-        return (
-            dag.directory()
-            .with_new_file("image-pins.json", content)
-            .file("image-pins.json")
-        )
-
-
+        return dag.directory().with_new_file("image-pins.json", content).file("image-pins.json")
 # No heading:1 ends here

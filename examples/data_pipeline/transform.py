@@ -1,6 +1,5 @@
 # [[file:readme.org::+begin_src python :tangle transform.py][No heading:1]]
 """Tiny CSV transform: read from stdin, uppercase the name column, write to stdout."""
-
 import csv
 import sys
 

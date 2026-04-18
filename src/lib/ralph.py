@@ -6,6 +6,7 @@ from dagger import dag, function
 
 
 class RalphMixin:
+
     def _ralph_tooling(
         self,
         ctr: dagger.Container,
@@ -16,30 +17,27 @@ class RalphMixin:
         q_home = shlex.quote(home)
         ctr = ctr.with_exec(
             [
-                "sh",
-                "-c",
+                "sh", "-c",
                 f"npm config set prefix {q_home}/.npm-global"
                 " && npm install -g"
                 " @ralph-orchestrator/ralph-cli"
                 " @anthropic-ai/claude-code",
             ]
         ).with_env_variable(
-            "PATH",
-            f"{home}/.npm-global/bin:$PATH",
-            expand=True,
+            "PATH", f"{home}/.npm-global/bin:$PATH", expand=True,
         )
-        ctr = ctr.with_exec(["sh", "-c", "pip install --quiet pytest"]).with_exec(
+        ctr = ctr.with_exec(
+            ["sh", "-c", "pip install --quiet pytest"]
+        ).with_exec(
             [
-                "sh",
-                "-c",
+                "sh", "-c",
                 f"cd {q_home} && curl -fsSL https://dl.dagger.io/dagger/install.sh"
                 " | BIN_DIR=$HOME/.local/bin sh",
             ]
         )
         if dagger_runner_host:
             ctr = ctr.with_env_variable(
-                "_EXPERIMENTAL_DAGGER_RUNNER_HOST",
-                dagger_runner_host,
+                "_EXPERIMENTAL_DAGGER_RUNNER_HOST", dagger_runner_host,
             )
         return ctr
 
@@ -53,8 +51,7 @@ class RalphMixin:
         q_email, q_name = map(shlex.quote, (email, name))
         return ctr.with_exec(
             [
-                "sh",
-                "-c",
+                "sh", "-c",
                 f"git config --global user.email {q_email}"
                 f" && git config --global user.name {q_name}"
                 " && git config --global init.defaultBranch main",
@@ -75,9 +72,7 @@ class RalphMixin:
         q_work_dir = shlex.quote(work_dir)
         ctr = (
             ctr.with_directory(
-                f"{work_dir}/.git",
-                src.directory(".git"),
-                owner=owner,
+                f"{work_dir}/.git", src.directory(".git"), owner=owner,
             )
             .with_directory(work_dir, src, owner=owner)
             .with_exec(["sh", "-c", f"cd {q_work_dir} && git checkout ."])
@@ -98,10 +93,12 @@ class RalphMixin:
         owner: str,
     ) -> dagger.Container:
         """Mount Claude credentials."""
-        return ctr.with_exec(["mkdir", "-p", f"{home}/.claude"]).with_mounted_secret(
-            f"{home}/.claude/.credentials.json",
-            credentials,
-            owner=owner,
+        return (
+            ctr
+            .with_exec(["mkdir", "-p", f"{home}/.claude"])
+            .with_mounted_secret(
+                f"{home}/.claude/.credentials.json", credentials, owner=owner,
+            )
         )
 
     def _ralph_run(
@@ -114,34 +111,25 @@ class RalphMixin:
         consul_key: str,
     ) -> dagger.Container:
         """Run ralph wrapper and generate patches."""
-        ctr = (
-            ctr.with_file(
-                "/tmp/ralph-wrapper.sh",
-                src.file("src/lib/ralph-wrapper.sh"),
-            )
-            .with_env_variable(
-                "WORK_DIR",
-                work_dir,
-            )
-            .with_env_variable(
-                "RALPH_ARGS",
-                ralph_args,
-            )
+        ctr = ctr.with_file(
+            "/tmp/ralph-wrapper.sh",
+            src.file("src/lib/ralph-wrapper.sh"),
+        ).with_env_variable(
+            "WORK_DIR", work_dir,
+        ).with_env_variable(
+            "RALPH_ARGS", ralph_args,
         )
         if consul_addr:
             ctr = ctr.with_env_variable(
-                "CONSUL_ADDR",
-                consul_addr,
+                "CONSUL_ADDR", consul_addr,
             ).with_env_variable(
-                "CONSUL_KEY",
-                consul_key,
+                "CONSUL_KEY", consul_key,
             )
         ctr = ctr.with_exec(["sh", "/tmp/ralph-wrapper.sh"])
         q_work_dir = shlex.quote(work_dir)
         ctr = ctr.with_exec(
             [
-                "sh",
-                "-c",
+                "sh", "-c",
                 f"cd {q_work_dir}"
                 " && mkdir -p patches"
                 " && base=$(cat /tmp/ralph-base-commit)"
@@ -193,12 +181,8 @@ class RalphMixin:
         home = f"/home/{username}"
         ctr = self._ralph_tooling(ctr, home, dagger_runner_host)
         ctr = self._ralph_git(ctr, git_email, git_name)
-        ctr = self._ralph_workdir(
-            ctr, src, work_dir, owner, ralph_yml, plan_md, todo_org
-        )
+        ctr = self._ralph_workdir(ctr, src, work_dir, owner, ralph_yml, plan_md, todo_org)
         ctr = self._ralph_credentials(ctr, home, claude_credentials, owner)
         ctr = self._ralph_run(ctr, src, work_dir, ralph_args, consul_addr, consul_key)
         return ctr.directory(work_dir)
-
-
 # No heading:1 ends here

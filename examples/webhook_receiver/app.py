@@ -12,6 +12,4 @@ def webhook():
 @app.route("/health")
 def health():
     return "ok\n"
-
-
 # No heading:1 ends here

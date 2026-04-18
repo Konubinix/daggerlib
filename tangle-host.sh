@@ -40,7 +40,7 @@ fi
 tangle_file() {
     local orgfile="$1"
     echo "Tangling $orgfile..."
-    local raw_output tangled_list rc=0
+    local raw_output rc=0
     raw_output=$(emacs --batch --no-init-file \
         -l "$SCRIPT_DIR/tangle.el" \
         --eval "(progn
@@ -54,17 +54,6 @@ tangle_file() {
         echo "$raw_output" >&2
         return "$rc"
     fi
-    tangled_list=$(echo "$raw_output" | grep -E '^/' || true)
-    # Post-process tangled files
-    for f in $tangled_list; do
-        [ -f "$f" ] || continue
-        # Strip trailing whitespace
-        sed -i 's/[[:space:]]*$//' "$f"
-        # Format Python files
-        case "$f" in
-            *.py) ruff format --quiet "$f" 2>/dev/null || true ;;
-        esac
-    done
 }
 
 if [ $# -eq 0 ]; then

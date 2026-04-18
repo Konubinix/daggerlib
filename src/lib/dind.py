@@ -17,6 +17,7 @@ exec dockerd-entrypoint-orig.sh "$@"
 
 
 class DindMixin:
+
     @function
     def dind_service(self) -> dagger.Service:
         """Return a Docker daemon running as a sidecar service.
@@ -34,13 +35,11 @@ class DindMixin:
                 "/etc/docker/daemon.json",
                 '{"dns": ["172.17.0.1"]}',
             )
-            .with_exec(
-                [
-                    "mv",
-                    "/usr/local/bin/dockerd-entrypoint.sh",
-                    "/usr/local/bin/dockerd-entrypoint-orig.sh",
-                ]
-            )
+            .with_exec([
+                "mv",
+                "/usr/local/bin/dockerd-entrypoint.sh",
+                "/usr/local/bin/dockerd-entrypoint-orig.sh",
+            ])
             .with_new_file(
                 "/usr/local/bin/dockerd-entrypoint.sh",
                 _DIND_DNS_ENTRYPOINT,
@@ -67,9 +66,7 @@ class DindMixin:
         if base is None:
             base = dag.container().from_(self.pinned(self._dind_base_image))
         docker_cli = (
-            dag.container()
-            .from_(self.pinned(self._dind_engine_image))
-            .file("/usr/local/bin/docker")
+            dag.container().from_(self.pinned(self._dind_engine_image)).file("/usr/local/bin/docker")
         )
         return base.with_file("/usr/local/bin/docker", docker_cli)
 
@@ -87,7 +84,8 @@ class DindMixin:
         if ctr is None:
             ctr = self.dind_container()
         return (
-            ctr.with_service_binding("docker", self.dind_service())
+            ctr
+            .with_service_binding("docker", self.dind_service())
             .with_env_variable("DOCKER_HOST", "tcp://docker:2375")
             .with_exec(["bash", "-c", cmd])
         )
@@ -98,20 +96,10 @@ class DindMixin:
         src: Annotated[
             dagger.Directory,
             DefaultPath("."),
-            Ignore(
-                [
-                    "**",
-                    "!src/lib/",
-                    "!src/ralph.yml",
-                    "!sdk/",
-                    "!tests/",
-                    "!examples/",
-                    "!dagger.json",
-                    "!.daggerignore",
-                    "!pyproject.toml",
-                    "!test-host.sh",
-                ]
-            ),
+            Ignore(["**",
+                    "!src/lib/", "!src/ralph.yml", "!sdk/", "!tests/", "!examples/",
+                    "!dagger.json", "!.daggerignore", "!pyproject.toml",
+                    "!test-host.sh"]),
         ],
     ) -> dagger.Container:
         """Run the project test suite inside Docker-in-Docker (dogfooding).
@@ -123,35 +111,21 @@ class DindMixin:
         """
         ctr = self.dind_container()
         ctr = (
-            ctr.with_exec(["apt-get", "update"])
-            .with_exec(
-                [
-                    "apt-get",
-                    "install",
-                    "--yes",
-                    "curl",
-                    "python3",
-                    "python3-pip",
-                    "python3-venv",
-                ]
-            )
-            .with_exec(
-                [
-                    "pip3",
-                    "install",
-                    "--break-system-packages",
-                    "pytest",
-                    "pytest-asyncio",
-                ]
-            )
-            .with_exec(
-                [
-                    "bash",
-                    "-c",
-                    "curl -fsSL https://dl.dagger.io/dagger/install.sh"
-                    " | DAGGER_VERSION=0.20.3 BIN_DIR=/usr/local/bin sh",
-                ]
-            )
+            ctr
+            .with_exec(["apt-get", "update"])
+            .with_exec([
+                "apt-get", "install", "--yes",
+                "curl", "python3", "python3-pip", "python3-venv",
+            ])
+            .with_exec([
+                "pip3", "install", "--break-system-packages",
+                "pytest", "pytest-asyncio",
+            ])
+            .with_exec([
+                "bash", "-c",
+                "curl -fsSL https://dl.dagger.io/dagger/install.sh"
+                " | DAGGER_VERSION=0.20.3 BIN_DIR=/usr/local/bin sh",
+            ])
             .with_directory("/work", src)
             .with_workdir("/work")
             .with_directory("/work/.git", dag.directory())
@@ -180,28 +154,14 @@ class DindMixin:
             dag.container()
             .from_(self.pinned(self._dind_base_image))
             .with_exec(["apt-get", "update"])
-            .with_exec(
-                [
-                    "apt-get",
-                    "install",
-                    "--yes",
-                    "emacs-nox",
-                    "elpa-htmlize",
-                    "curl",
-                    "git",
-                    "python3",
-                    "python3-pip",
-                    "python3-venv",
-                ]
-            )
-            .with_exec(
-                [
-                    "pip3",
-                    "install",
-                    "--break-system-packages",
-                    "ruff",
-                ]
-            )
+            .with_exec([
+                "apt-get", "install", "--yes",
+                "emacs-nox", "elpa-htmlize", "curl",
+                "git", "python3", "python3-pip", "python3-venv",
+            ])
+            .with_exec([
+                "pip3", "install", "--break-system-packages", "ruff",
+            ])
             .with_directory("/work", src)
             .with_workdir("/work")
         )
@@ -215,36 +175,20 @@ class DindMixin:
         """
         ctr = self.dind_container()
         return (
-            ctr.with_exec(["apt-get", "update"])
-            .with_exec(
-                [
-                    "apt-get",
-                    "install",
-                    "--yes",
-                    "curl",
-                    "emacs-nox",
-                    "git",
-                    "python3",
-                    "python3-pip",
-                    "python3-venv",
-                ]
-            )
-            .with_exec(
-                [
-                    "pip3",
-                    "install",
-                    "--break-system-packages",
-                    "ruff",
-                ]
-            )
-            .with_exec(
-                [
-                    "bash",
-                    "-c",
-                    "curl -fsSL https://dl.dagger.io/dagger/install.sh"
-                    " | DAGGER_VERSION=0.20.3 BIN_DIR=/usr/local/bin sh",
-                ]
-            )
+            ctr
+            .with_exec(["apt-get", "update"])
+            .with_exec([
+                "apt-get", "install", "--yes",
+                "curl", "emacs-nox", "git", "python3", "python3-pip", "python3-venv",
+            ])
+            .with_exec([
+                "pip3", "install", "--break-system-packages", "ruff",
+            ])
+            .with_exec([
+                "bash", "-c",
+                "curl -fsSL https://dl.dagger.io/dagger/install.sh"
+                " | DAGGER_VERSION=0.20.3 BIN_DIR=/usr/local/bin sh",
+            ])
         )
 
     @function
@@ -253,27 +197,15 @@ class DindMixin:
         src: Annotated[
             dagger.Directory,
             DefaultPath("."),
-            Ignore(
-                [
-                    "**",
-                    "!src/",
-                    "!tests/",
-                    "!examples/",
-                    "!studies/",
-                    "!.clk/",
-                    "!*.org",
-                    "!*.sh",
-                    "!*.el",
-                    "!dagger.json",
-                ]
-            ),
+            Ignore(["**",
+                    "!src/", "!tests/", "!examples/", "!studies/", "!.clk/",
+                    "!*.org", "!*.sh", "!*.el",
+                    "!dagger.json"]),
         ],
     ) -> dagger.Directory:
         """Tangle org files inside a container and return only the modified files."""
         ctr = self.emacs_container(src=src)
-        ctr = ctr.with_mounted_cache(
-            "/work/.tangle-deps", dag.cache_volume("tangle-deps")
-        )
+        ctr = ctr.with_mounted_cache("/work/.tangle-deps", dag.cache_volume("tangle-deps"))
         before = ctr.directory("/work")
         after = ctr.with_exec(["./tangle-host.sh"]).directory("/work")
         return before.diff(after)
@@ -284,24 +216,13 @@ class DindMixin:
         src: Annotated[
             dagger.Directory,
             DefaultPath("."),
-            Ignore(
-                [
-                    "**",
-                    "!src/",
-                    "!examples/",
-                    "!studies/",
-                    "!tests/dagger",
-                    "!tests/ralph-log-filter",
+            Ignore(["**",
+                    "!src/", "!examples/", "!studies/",
+                    "!tests/dagger", "!tests/ralph-log-filter",
                     "!tests/ralph_log_sample.txt",
-                    "!*.org",
-                    "!*.sh",
-                    "!*.el",
-                    "!dagger.json",
-                    "!.daggerignore",
-                    "!pyproject.toml",
-                    "!sdk/",
-                ]
-            ),
+                    "!*.org", "!*.sh", "!*.el",
+                    "!dagger.json", "!.daggerignore", "!pyproject.toml",
+                    "!sdk/"]),
         ],
         files: list[str] | None = None,
         no_cache: bool = False,
@@ -312,7 +233,8 @@ class DindMixin:
         """
         ctr = self.dind_emacs_container()
         ctr = (
-            ctr.with_directory("/work", src)
+            ctr
+            .with_directory("/work", src)
             .with_workdir("/work")
             .with_mounted_cache("/work/.tangle-deps", dag.cache_volume("tangle-deps"))
         )
@@ -331,19 +253,11 @@ class DindMixin:
         src: Annotated[
             dagger.Directory,
             DefaultPath("."),
-            Ignore(
-                [
-                    "**",
-                    "!src/lib/",
-                    "!examples/",
-                    "!*.sh",
-                    "!*.el",
-                    "!dagger.json",
-                    "!.daggerignore",
-                    "!pyproject.toml",
-                    "!sdk/",
-                ]
-            ),
+            Ignore(["**",
+                    "!src/lib/", "!examples/",
+                    "!*.sh", "!*.el",
+                    "!dagger.json", "!.daggerignore", "!pyproject.toml",
+                    "!sdk/"]),
         ],
         from_scratch: bool = False,
         no_cache: bool = False,
@@ -351,7 +265,8 @@ class DindMixin:
         """Init example modules inside a DinD container and return only the modified files."""
         ctr = self.dind_emacs_container()
         ctr = (
-            ctr.with_directory("/work", src)
+            ctr
+            .with_directory("/work", src)
             .with_workdir("/work")
             .with_mounted_cache("/work/.tangle-deps", dag.cache_volume("tangle-deps"))
         )
@@ -370,25 +285,16 @@ class DindMixin:
         src: Annotated[
             dagger.Directory,
             DefaultPath("."),
-            Ignore(
-                [
-                    "**",
-                    "!src/*.org",
-                    "!tests/testing.org",
+            Ignore(["**",
+                    "!src/*.org", "!tests/testing.org",
                     "!examples/*/readme.org",
-                    "!*.org",
-                    "!*.sh",
-                    "!*.el",
-                    "!dagger.json",
-                ]
-            ),
+                    "!*.org", "!*.sh", "!*.el",
+                    "!dagger.json"]),
         ],
     ) -> dagger.Directory:
         """Export org files to HTML with noweb expansion for GitHub Pages."""
         ctr = self.emacs_container(src=src)
-        ctr = ctr.with_mounted_cache(
-            "/work/.tangle-deps", dag.cache_volume("tangle-deps")
-        )
+        ctr = ctr.with_mounted_cache("/work/.tangle-deps", dag.cache_volume("tangle-deps"))
         return ctr.with_exec(["./export-html-host.sh"]).directory("/work/_site")
 
     @property
@@ -398,6 +304,4 @@ class DindMixin:
     @property
     def _dind_base_image(self) -> str:
         return self.dind_ubuntu_image
-
-
 # No heading:1 ends here

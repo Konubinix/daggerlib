@@ -186,7 +186,9 @@ programming setup, tangling pipeline, and editor configuration. See
             (mapconcat #'identity (nreverse lines) "\n"))))))
 
   (defun daggerlib--write-expected-files (tangled-files)
-    "For each tangled command file, write expected output from #+RESULTS."
+    "For each tangled command file, write expected output from #+RESULTS.
+Skip the write when content is already up-to-date — rewriting unchanged files
+would bump mtimes and invalidate Dagger's Directory.diff downstream."
     (let ((root (locate-dominating-file default-directory "dagger.json")))
       (dolist (f tangled-files)
         (when (string-match "/tests/commands/\\([^/]+\\)$" f)
@@ -196,11 +198,18 @@ programming setup, tangling pipeline, and editor configuration. See
               (let* ((cmd-rel (file-relative-name f root))
                      (exp-rel (replace-regexp-in-string
                                "/commands/" "/expected/" cmd-rel))
-                     (expected-file (expand-file-name exp-rel root)))
-                (make-directory (file-name-directory expected-file) t)
-                (with-temp-file expected-file
-                  (insert result "\n"))
-                (message "auto-expected: %s" expected-file))))))))
+                     (expected-file (expand-file-name exp-rel root))
+                     (new-content (concat result "\n"))
+                     (old-content (when (file-exists-p expected-file)
+                                    (with-temp-buffer
+                                      (insert-file-contents-literally
+                                       expected-file)
+                                      (buffer-string)))))
+                (unless (equal new-content old-content)
+                  (make-directory (file-name-directory expected-file) t)
+                  (with-temp-file expected-file
+                    (insert new-content))
+                  (message "auto-expected: %s" expected-file)))))))))
 
   ;;; reproducibility-helpers.el ends here
   #+end_src
@@ -343,6 +352,14 @@ programming setup, tangling pipeline, and editor configuration. See
                 (daggerlib--write-expected-files files)
                 files))
 
+  ;; Strip trailing whitespace in the per-block tangle buffer.  Doing this
+  ;; inside the body-hook (instead of `sed -i' post-emacs) keeps the tangle
+  ;; buffer byte-identical to the on-disk file, so org-babel-tangle's
+  ;; compare-buffer-substrings (ob-tangle.el:320) skips write-region — no
+  ;; mtime change, Dagger's Directory.diff stays empty, downstream caches
+  ;; (notably ./test.sh) survive across runs.
+  (add-hook 'org-babel-tangle-body-hook #'delete-trailing-whitespace)
+
   ;;; tangle.el ends here
   #+end_src
 
@@ -356,6 +373,15 @@ programming setup, tangling pipeline, and editor configuration. See
   as the bootstrap script, but tangles everything rather than just
   the bootstrap subset.  The daily-use =tangle.sh= wrapper runs this
   inside a container for reproducibility.
+
+  No post-processing: =org-babel-tangle= writes tangle targets as-is
+  and already skips =write-region= when the content is unchanged
+  (=ob-tangle.el:315-327=).  Trailing whitespace is stripped per
+  block via =org-babel-tangle-body-hook= in =tangle.el=, not via
+  =sed -i= — that way the tangle buffer stays byte-identical to the
+  on-disk file and emacs' idempotence check keeps the mtime frozen,
+  which in turn keeps Dagger's =Directory.diff= empty and preserves
+  downstream caches across runs.
 
   #+begin_src bash :tangle tangle-host.sh :shebang "#!/usr/bin/env bash" :noweb yes
   # Tangle all org files.
@@ -371,7 +397,7 @@ programming setup, tangling pipeline, and editor configuration. See
   tangle_file() {
       local orgfile="$1"
       echo "Tangling $orgfile..."
-      local raw_output tangled_list rc=0
+      local raw_output rc=0
       raw_output=$(emacs --batch --no-init-file \
           -l "$SCRIPT_DIR/tangle.el" \
           --eval "(progn
@@ -385,17 +411,6 @@ programming setup, tangling pipeline, and editor configuration. See
           echo "$raw_output" >&2
           return "$rc"
       fi
-      tangled_list=$(echo "$raw_output" | grep -E '^/' || true)
-      # Post-process tangled files
-      for f in $tangled_list; do
-          [ -f "$f" ] || continue
-          # Strip trailing whitespace
-          sed -i 's/[[:space:]]*$//' "$f"
-          # Format Python files
-          case "$f" in
-              *.py) ruff format --quiet "$f" 2>/dev/null || true ;;
-          esac
-      done
   }
 
   if [ $# -eq 0 ]; then
