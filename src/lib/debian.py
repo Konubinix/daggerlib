@@ -35,9 +35,10 @@ class DebianMixin:
         ])
 
     @function
-    def debian(self, distro_packages: list[str] = ()) -> dagger.Container:
+    def debian(self, distro_packages: list[str] = (), platform: str = "") -> dagger.Container:
         """Debian slim with timezone set, no auto-install, and optional extra packages."""
-        ctr = dag.container().from_(self.pinned(self._debian_image))
+        base = dag.container(platform=dagger.Platform(platform)) if platform else dag.container()
+        ctr = base.from_(self.pinned(self._debian_image))
         ctr = self.debian_no_auto_install(ctr)
         ctr = self.debian_set_tz(ctr)
         if distro_packages:
@@ -52,9 +53,9 @@ class DebianMixin:
         return ctr
 
     @function
-    def debian_user(self, distro_packages: list[str] = ()) -> dagger.Container:
+    def debian_user(self, distro_packages: list[str] = (), platform: str = "") -> dagger.Container:
         """Debian with a default user."""
-        ctr = self.debian(distro_packages=distro_packages)
+        ctr = self.debian(distro_packages=distro_packages, platform=platform)
         return self.use_user(ctr)
 
     @function
@@ -64,9 +65,10 @@ class DebianMixin:
         groups: list[str] = (),
         pip_packages: list[str] = (),
         work_dir: str = "/app",
+        platform: str = "",
     ) -> dagger.Container:
         """Debian with python, user, and a virtualenv."""
-        ctr = self.debian(distro_packages=["python3-venv"] + list(distro_packages))
+        ctr = self.debian(distro_packages=["python3-venv"] + list(distro_packages), platform=platform)
         return self.python_user_venv(ctr, groups=groups, pip_packages=pip_packages, work_dir=work_dir)
 
     @function
