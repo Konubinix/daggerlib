@@ -126,7 +126,7 @@ class DataPipeline:
   #+end_src
 
   #+RESULTS[27d55bd6a5acdf96e466201444827416f908a2b3]: venv_with_packages
-  : 2.33.1
+  : 2.34.2
 
 
 * Switching to Debian for native database drivers
