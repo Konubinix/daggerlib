@@ -5,24 +5,6 @@ This file documents the internals of daggerlib: the literate
 programming setup, tangling pipeline, and editor configuration. See
 [[file:readme.org][readme.org]] for an introduction.
 
-* Known issues with the current engine version
-
-  The module pins =engineVersion= =v0.20.3= in =dagger.json=.
-
-  The engine's telemetry proxy returns HTTP 500 for =/v1/metrics=
-  protobuf payloads sent by module runtimes.  Traces and logs work
-  fine through the same proxy.  The bug is invisible in fast calls
-  (the Python SDK's default 60 s export interval never fires), but
-  surfaces in DinD test runs where cold module loading takes long
-  enough for the periodic metric export to trigger.  The error is
-  cosmetic — dagger functionality is not affected.
-
-  The root cause is a race or initialization bug in the telemetry
-  PubSub during module loading, fixed on main as a side effect of
-  commit =db59252ad= ("workspace: plumbing & compat", 2026-03-31).
-  Upgrading past v0.20.3 will resolve it.  A reproducer lives in
-  =~/test/otel-repro/=.
-
 * Module entry point
 
   The =Lib= class and its =__init__.py= are defined in

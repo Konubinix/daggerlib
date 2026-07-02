@@ -124,7 +124,7 @@ class DindMixin:
             .with_exec([
                 "bash", "-c",
                 "curl -fsSL https://dl.dagger.io/dagger/install.sh"
-                " | DAGGER_VERSION=0.20.3 BIN_DIR=/usr/local/bin sh",
+                " | DAGGER_VERSION=0.21.7 BIN_DIR=/usr/local/bin sh",
             ])
             .with_directory("/work", src)
             .with_workdir("/work")
@@ -187,7 +187,7 @@ class DindMixin:
             .with_exec([
                 "bash", "-c",
                 "curl -fsSL https://dl.dagger.io/dagger/install.sh"
-                " | DAGGER_VERSION=0.20.3 BIN_DIR=/usr/local/bin sh",
+                " | DAGGER_VERSION=0.21.7 BIN_DIR=/usr/local/bin sh",
             ])
         )
 

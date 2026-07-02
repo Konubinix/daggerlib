@@ -1,6 +1,6 @@
 {
   "name": "ci_like_production",
-  "engineVersion": "v0.20.3",
+  "engineVersion": "v0.21.7",
   "sdk": {
     "source": "python"
   },
