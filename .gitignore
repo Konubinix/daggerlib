@@ -10,3 +10,4 @@
 flycheck_*
 /_site/
 /.claude/worktrees
+.agent-shell

@@ -6,11 +6,18 @@
       "Bash(./run.sh *)",
       "Bash(./tangle.sh *)",
       "Bash(./test.sh *)",
+      "Bash(./test.sh)",
+      "Bash(echo *)",
       "Bash(uuidgen)",
 
       "WebSearch",
 
-      "mcp__konix-coord__coord_sleep"
+      "mcp__konix-coord__coord_get_messages",
+      "mcp__konix-coord__coord_get_tasks",
+      "mcp__konix-coord__coord_register",
+      "mcp__konix-coord__coord_send_message",
+      "mcp__konix-coord__coord_sleep",
+      "mcp__konix-coord__coord_wait"
     ]
   }
 }
