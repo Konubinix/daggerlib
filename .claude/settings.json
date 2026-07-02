@@ -1,12 +1,16 @@
 {
-    "permissions": {
-        "allow": [
-            "WebSearch",
-            "Bash(uuidgen)",
-            "Bash(./tangle.sh *)",
-            "Bash(./init-examples.sh *)",
-            "Bash(./run.sh *)",
-            "Bash(./test.sh *)"
-        ]
-    }
+  "permissions": {
+    "allow": [
+      "Bash(./init-examples.sh *)",
+      "Bash(./run.sh *\")",
+      "Bash(./run.sh *)",
+      "Bash(./tangle.sh *)",
+      "Bash(./test.sh *)",
+      "Bash(uuidgen)",
+
+      "WebSearch",
+
+      "mcp__konix-coord__coord_sleep"
+    ]
+  }
 }
