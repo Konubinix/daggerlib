@@ -18,9 +18,10 @@ class AlpineMixin:
         ])
 
     @function
-    def alpine(self, distro_packages: list[str] = ()) -> dagger.Container:
+    def alpine(self, distro_packages: list[str] = (), platform: str = "") -> dagger.Container:
         """Alpine with timezone set and optional extra packages."""
-        ctr = dag.container().from_(self.pinned(self._alpine_image))
+        base = dag.container(platform=dagger.Platform(platform)) if platform else dag.container()
+        ctr = base.from_(self.pinned(self._alpine_image))
         ctr = self.alpine_set_tz(ctr)
         if distro_packages:
             ctr = ctr.with_exec(["apk", "--quiet", "add"] + list(distro_packages))
@@ -32,9 +33,10 @@ class AlpineMixin:
         distro_packages: list[str] = (),
         groups: list[str] = (),
         uid: int = 1000,
+        platform: str = "",
     ) -> dagger.Container:
         """Alpine with a default user."""
-        ctr = self.alpine(distro_packages=distro_packages)
+        ctr = self.alpine(distro_packages=distro_packages, platform=platform)
         return self.use_user(ctr, uid=uid, groups=groups)
 
     @function
@@ -48,9 +50,9 @@ class AlpineMixin:
         )
 
     @function
-    def alpine_python(self, distro_packages: list[str] = ()) -> dagger.Container:
+    def alpine_python(self, distro_packages: list[str] = (), platform: str = "") -> dagger.Container:
         """Alpine with python3 and pip."""
-        return self.alpine(distro_packages=["python3", "py3-pip"] + list(distro_packages))
+        return self.alpine(distro_packages=["python3", "py3-pip"] + list(distro_packages), platform=platform)
 
     @function
     def alpine_python_user_venv(
@@ -59,9 +61,10 @@ class AlpineMixin:
         groups: list[str] = (),
         pip_packages: list[str] = (),
         work_dir: str = "/app",
+        platform: str = "",
     ) -> dagger.Container:
         """Alpine with python, user, and a virtualenv."""
-        ctr = self.alpine_python(distro_packages=distro_packages)
+        ctr = self.alpine_python(distro_packages=distro_packages, platform=platform)
         return self.python_user_venv(ctr, groups=groups, pip_packages=pip_packages, work_dir=work_dir)
 
     @property

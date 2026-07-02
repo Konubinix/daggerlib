@@ -69,7 +69,7 @@ class AlpineMixin:
   dagger call alpine with-exec --args="cat","/etc/timezone" stdout
   #+end_src
 
-  #+RESULTS[3cc353582a7a12211c1d6068181237e1d294ac3b]: alpine_timezone
+  #+RESULTS[b834b7d59ceab3cfdc0e1686399e87d889fa7a5c]: alpine_timezone
   : Europe/Paris
 
 
@@ -78,20 +78,25 @@ class AlpineMixin:
   :ID:       fcb8570e-2515-4a0f-a703-4b6ed673464a
   :END:
 
-  Sometimes I need additional tools. The =alpine= target gives me a
-  timezone-ready Alpine with an easy way to add packages.
+  Sometimes I need additional tools, and sometimes I need the image built for
+  a CPU architecture other than the one building it — these flows run on
+  heterogeneous nodes, and each must land on whichever architecture its node
+  runs. The =alpine= target gives me a timezone-ready Alpine with an easy way
+  to add packages and to choose that target architecture.
 
   [[https://docs.dagger.io/api/reference#definition-Container][dag.container()]] creates a new empty container — the starting point
   for every pipeline step. [[https://docs.dagger.io/api/reference#definition-Container][.from_]] sets the base image, like =FROM= in
-  a Dockerfile. We chain =with_exec= to install any extra packages the
-  caller requested.
+  a Dockerfile. A =platform= argument asks Dagger to pull that base image for
+  the target architecture; left empty, it stays on the host's. We chain
+  =with_exec= to install any extra packages the caller requested.
 
   #+NAME: alpine
   #+begin_src python
   @function
-  def alpine(self, distro_packages: list[str] = ()) -> dagger.Container:
+  def alpine(self, distro_packages: list[str] = (), platform: str = "") -> dagger.Container:
       """Alpine with timezone set and optional extra packages."""
-      ctr = dag.container().from_(self.pinned(self._alpine_image))
+      base = dag.container(platform=dagger.Platform(platform)) if platform else dag.container()
+      ctr = base.from_(self.pinned(self._alpine_image))
       ctr = self.alpine_set_tz(ctr)
       if distro_packages:
           ctr = ctr.with_exec(["apk", "--quiet", "add"] + list(distro_packages))
@@ -103,8 +108,19 @@ class AlpineMixin:
   dagger call alpine --distro-packages=curl with-exec --args="which","curl" stdout
   #+end_src
 
-  #+RESULTS[ff726b3fbdcb2e159d20e0b41f2c401868d4da7c]: alpine_distro_packages
+  #+RESULTS[479c5fc8a68a0c0a28fcfb084d9655ed75f758e2]: alpine_distro_packages
   : /usr/bin/curl
+
+
+  Built for another architecture, the container reports it:
+
+  #+NAME: alpine_platform
+  #+begin_src bash :tangle (daggerlib-auto-test) :comments no :padline no
+  dagger call alpine --platform=linux/arm64 platform
+  #+end_src
+
+  #+RESULTS[fba46eab508e474bae1b69b17fce8406fe751c27]: alpine_platform
+  : linux/arm64
 
 
 * A non-root user for safer workflows
@@ -123,9 +139,10 @@ class AlpineMixin:
       distro_packages: list[str] = (),
       groups: list[str] = (),
       uid: int = 1000,
+      platform: str = "",
   ) -> dagger.Container:
       """Alpine with a default user."""
-      ctr = self.alpine(distro_packages=distro_packages)
+      ctr = self.alpine(distro_packages=distro_packages, platform=platform)
       return self.use_user(ctr, uid=uid, groups=groups)
   #+end_src
 
@@ -134,7 +151,7 @@ class AlpineMixin:
   dagger call alpine-user with-exec --args="id","sam" stdout
   #+end_src
 
-  #+RESULTS[8b22ced4590bf3e6c94fe2c550ebb0e692f9627b]: alpine_user_check
+  #+RESULTS[336c04e3400a9fec0bcb3c3d38c2e88e2220c13c]: alpine_user_check
   : uid=1000(sam) gid=1000(sam) groups=1000(sam),1000(sam)
 
 
@@ -143,8 +160,17 @@ class AlpineMixin:
   dagger call alpine-user --uid=2000 with-exec --args="id","-u" stdout
   #+end_src
 
-  #+RESULTS[e6cf8b64551bb75c711f4788558b36d0f486cbbe]: alpine_user_uid
+  #+RESULTS[528a20828682295ba70b50ea8b549d8d56692237]: alpine_user_uid
   : 2000
+
+
+  #+NAME: alpine_user_platform
+  #+begin_src bash :tangle (daggerlib-auto-test) :comments no :padline no
+  dagger call alpine-user --platform=linux/arm64 platform
+  #+end_src
+
+  #+RESULTS[8f1e782ca0fd4729c21b85e8b4742e73666b3565]: alpine_user_platform
+  : linux/arm64
 
 
 * Timezone artifacts for other containers
@@ -180,7 +206,7 @@ class AlpineMixin:
   ls "$TMP/out" | sort
   #+end_src
 
-  #+RESULTS[b7ffa281381fd0bb5e5cf961229be70fccfe6a10]: alpine_tz_export
+  #+RESULTS[72aedcd64cd91e59bf55885338834829fb9eea75]: alpine_tz_export
   : localtime
   : timezone
 
@@ -195,9 +221,9 @@ class AlpineMixin:
   #+NAME: alpine-python
   #+begin_src python
   @function
-  def alpine_python(self, distro_packages: list[str] = ()) -> dagger.Container:
+  def alpine_python(self, distro_packages: list[str] = (), platform: str = "") -> dagger.Container:
       """Alpine with python3 and pip."""
-      return self.alpine(distro_packages=["python3", "py3-pip"] + list(distro_packages))
+      return self.alpine(distro_packages=["python3", "py3-pip"] + list(distro_packages), platform=platform)
   #+end_src
 
   #+NAME: alpine_python_check
@@ -205,8 +231,17 @@ class AlpineMixin:
   dagger call alpine-python with-exec --args="python3","--version" stdout
   #+end_src
 
-  #+RESULTS[9e60677459aaa1f44f0a410caa7c607cd1933ded]: alpine_python_check
+  #+RESULTS[0bea1f5d8258e0b722ffe41289352dc340ff572b]: alpine_python_check
   : Python 3.12.13
+
+
+  #+NAME: alpine_python_platform
+  #+begin_src bash :tangle (daggerlib-auto-test) :comments no :padline no
+  dagger call alpine-python --platform=linux/arm64 platform
+  #+end_src
+
+  #+RESULTS[83f0cff602570c9a73a06d2f2404b3122bf8b866]: alpine_python_platform
+  : linux/arm64
 
 
 * Python with a user and virtualenv
@@ -230,9 +265,10 @@ class AlpineMixin:
       groups: list[str] = (),
       pip_packages: list[str] = (),
       work_dir: str = "/app",
+      platform: str = "",
   ) -> dagger.Container:
       """Alpine with python, user, and a virtualenv."""
-      ctr = self.alpine_python(distro_packages=distro_packages)
+      ctr = self.alpine_python(distro_packages=distro_packages, platform=platform)
       return self.python_user_venv(ctr, groups=groups, pip_packages=pip_packages, work_dir=work_dir)
   #+end_src
 
@@ -241,8 +277,17 @@ class AlpineMixin:
   dagger call alpine-python-user-venv with-exec --args="sh","-c","test -d /app/venv && /app/venv/bin/python --version" stdout
   #+end_src
 
-  #+RESULTS[d571b928bf242d5eb1af4fcdade0238511038821]: alpine_python_user_venv_check
+  #+RESULTS[4a5d1ec4127761d7a473f4c0f6770f5280830fa8]: alpine_python_user_venv_check
   : Python 3.12.13
+
+
+  #+NAME: alpine_python_user_venv_platform
+  #+begin_src bash :tangle (daggerlib-auto-test) :comments no :padline no
+  dagger call alpine-python-user-venv --platform=linux/arm64 platform
+  #+end_src
+
+  #+RESULTS[15dcc829a83d2ce901662d0a5c6866e73035ae82]: alpine_python_user_venv_platform
+  : linux/arm64
 
 
 * Image reference for pin management
