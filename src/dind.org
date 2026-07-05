@@ -395,7 +395,11 @@ class DindMixin:
 ** Running org-babel blocks
 
    Runs =./run-host.sh= with dockerd available (babel blocks call
-   =dagger call=) and returns only the modified files.
+   =dagger call=) and returns only the modified files.  An example
+   block calls its own module, which declares =lib= as a local
+   dependency at =../..=.  The example's =dagger call= reaches =lib=
+   only when an empty =.git= is mounted alongside the source, so the
+   runner mounts one (as =dind_run_tests= does).
 
    #+NAME: dind-run-org
    #+begin_src python
@@ -424,6 +428,7 @@ class DindMixin:
            ctr
            .with_directory("/work", src)
            .with_workdir("/work")
+           .with_directory("/work/.git", dag.directory())
            .with_mounted_cache("/work/.tangle-deps", dag.cache_volume("tangle-deps"))
        )
        before = ctr.directory("/work")
@@ -435,6 +440,26 @@ class DindMixin:
        after = self.dind_with_docker(cmd=cmd, ctr=ctr).directory("/work")
        return before.diff(after)
    #+end_src
+
+   Running a committed example through the runner must reproduce its
+   results.  Re-running re-saves the file even when its
+   contents are unchanged, so it always turns up in the returned diff and
+   a bare diff would mislead; instead we read one block's result,
+   =flask_gunicorn_check=, back from the run and pin that it carries its
+   value rather than an empty line.  We assert the example is present
+   first, so a removed fixture fails loudly.
+
+   #+NAME: dind_run_org_keeps_example_results
+   #+begin_src bash :tangle (daggerlib-auto-test) :comments no :padline no
+   f=examples/webhook_receiver/readme.org
+   test -s "$f" || { echo MISSING_FIXTURE; exit 1; }
+   after=$(dagger call dind-run-org --files="$f" --no-cache file --path="$f" contents) || { echo DAGGER_FAILED; exit 1; }
+   result=$(printf '%s\n' "$after" | grep -A1 '#+RESULTS.*: flask_gunicorn_check' | sed -n 's/^ *: //p')
+   echo "flask_gunicorn_check=[$result]"
+   #+end_src
+
+   #+RESULTS[1b0e2a2193d6ee723235797db1163c23339c5bc8]: dind_run_org_keeps_example_results
+   : flask_gunicorn_check=[gunicorn config ok]
 
 ** Initializing examples
 

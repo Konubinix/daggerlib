@@ -235,6 +235,7 @@ class DindMixin:
             ctr
             .with_directory("/work", src)
             .with_workdir("/work")
+            .with_directory("/work/.git", dag.directory())
             .with_mounted_cache("/work/.tangle-deps", dag.cache_volume("tangle-deps"))
         )
         before = ctr.directory("/work")

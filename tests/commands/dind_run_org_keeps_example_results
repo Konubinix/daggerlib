@@ -1,0 +1,5 @@
+f=examples/webhook_receiver/readme.org
+test -s "$f" || { echo MISSING_FIXTURE; exit 1; }
+after=$(dagger call dind-run-org --files="$f" --no-cache file --path="$f" contents) || { echo DAGGER_FAILED; exit 1; }
+result=$(printf '%s\n' "$after" | grep -A1 '#+RESULTS.*: flask_gunicorn_check' | sed -n 's/^ *: //p')
+echo "flask_gunicorn_check=[$result]"
