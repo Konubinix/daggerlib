@@ -10,6 +10,7 @@ from .distroless import DistrolessMixin
 from .flask_venv import FlaskMixin
 from .pins import PinsMixin
 from .pip_tools import PipToolsMixin
+from .publish import PublishMixin
 from .python import PythonMixin
 from .user import UserMixin
 
@@ -25,6 +26,7 @@ class Lib(
     FlaskMixin,
     PipToolsMixin,
     PinsMixin,
+    PublishMixin,
 ):
     alpine_version: str = "3.23"
     debian_version: str = "13"

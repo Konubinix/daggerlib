@@ -1,0 +1,125 @@
+#+TITLE: Publishing multi-arch images
+#+LANGUAGE: en
+#+PROPERTY: header-args:python :tangle no
+#+PROPERTY: header-args:bash   :tangle no :dir ".." :results verbatim :cache yes
+
+Modules that ship images each hardcode their own publish address. The
+library offers one place to do it: publish a set of platform variants as
+a single multi-arch image. It assumes nothing about the registry — the
+caller passes the full address they want to push to.
+
+#+begin_src python :tangle lib/publish.py :noweb yes :exports none
+import dagger
+from dagger import dag, function
+
+
+class PublishMixin:
+
+    <<publish>>
+
+    <<publish-roundtrip>>
+
+    <<registry-image>>
+#+end_src
+
+* Publishing variants to a chosen address
+
+  The caller builds their platform variants and names the destination;
+  we hand them to Dagger as one multi-arch publish and return the
+  resulting reference.
+
+  Most of the time that destination is an ordinary external registry
+  reachable by URL, and its address is all Dagger needs. But sometimes
+  the registry lives inside the same pipeline — a CI job stands up a
+  local registry as a Dagger service, publishes to it, and lets later
+  stages pull from it. Dagger can only route a publish to such an
+  in-pipeline registry when it is handed the service itself, so =publish=
+  takes an optional =registry_service=; omit it for the external case.
+
+  #+NAME: publish
+  #+begin_src python
+  @function
+  async def publish(
+      self,
+      variants: list[dagger.Container],
+      address: str,
+      registry_service: dagger.Service | None = None,
+  ) -> str:
+      """Publish VARIANTS as one multi-arch image at ADDRESS."""
+      ctr = dag.container()
+      if registry_service is not None:
+          return await ctr.publish(
+              address, platform_variants=variants, registry_service=registry_service,
+          )
+      return await ctr.publish(address, platform_variants=variants)
+  #+end_src
+
+* The published image is a real multi-arch index
+  :PROPERTIES:
+  :ID:       6b0e2f4a-9c31-4d57-8a2e-1f0b7c9d5e83
+  :END:
+
+  =publish= earns its keep only if handing it several platform variants
+  yields one image a client can pull per architecture. This test proves
+  that end to end without leaving the pipeline: =publish-roundtrip= stands
+  up a throwaway registry as a service, publishes an amd64 and an arm64
+  variant through =publish=, then pulls each arch back. It answers =ok=
+  only when both resolve — so a single-arch publish would fail it.
+
+  Reading each arch back through =/etc/alpine-release= is a file
+  extraction, not an exec, so a foreign architecture never has to run
+  under emulation. Under the hood the address must be =localhost:5000=
+  because Dagger only treats =localhost= as an insecure plain-HTTP
+  registry, which is what the throwaway =registry:2= serves.
+
+  #+NAME: publish-roundtrip
+  #+begin_src python
+  @function
+  async def publish_roundtrip(self) -> str:
+      """Push a two-arch image to a throwaway registry and read both arches back."""
+      platforms = ("linux/amd64", "linux/arm64")
+      registry = (
+          dag.container()
+          .from_(self.pinned(self._registry_image))
+          .with_exposed_port(5000)
+          .as_service()
+      )
+      variants = [
+          dag.container(platform=dagger.Platform(p)).from_(self.pinned(self._alpine_image))
+          for p in platforms
+      ]
+      addr = "localhost:5000/probe:t"
+      await self.publish(variants, addr, registry_service=registry)
+      for p in platforms:
+          release = await (
+              dag.container(platform=dagger.Platform(p))
+              .from_(addr, registry_service=registry)
+              .file("/etc/alpine-release")
+              .contents()
+          )
+          if not release.strip():
+              return f"empty:{p}"
+      return "ok"
+  #+end_src
+
+  #+NAME: publish_roundtrip_multiarch
+  #+begin_src bash :tangle (daggerlib-auto-test) :comments no :padline no
+  dagger call publish-roundtrip
+  #+end_src
+
+  #+RESULTS[76af099b51216943b7c8338d84416d152734a06b]: publish_roundtrip_multiarch
+  : ok
+
+* Image reference for pin management
+
+  See [[file:alpine.org::*Image reference for pin management][alpine]] for the convention.  The throwaway
+  registry the round-trip stands up is pinned like every other image, so
+  the test is reproducible; this property lets the =_*_image= discovery
+  convention pick it up.
+
+  #+NAME: registry-image
+  #+begin_src python
+  @property
+  def _registry_image(self) -> str:
+      return "registry:2"
+  #+end_src
