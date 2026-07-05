@@ -1,7 +1,7 @@
 #+TITLE: Minimal production images
 #+LANGUAGE: en
 #+PROPERTY: header-args:python :tangle no
-#+PROPERTY: header-args:bash   :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
+#+PROPERTY: header-args:bash   :tangle no :dir ".." :results verbatim :cache yes
 
 For production, I want the smallest possible attack surface. Distroless
 images have no shell, no package manager — just my application and its
@@ -68,7 +68,7 @@ class DistrolessMixin:
   dagger call distroless-python-3-debian with-exec --args="python3","-c","import os; print(os.path.exists('/etc/localtime'))" stdout
   #+end_src
 
-  #+RESULTS[27c2be75148473c961ef2961c62a5476c8ecf50d]: distroless_python3
+  #+RESULTS[28b2745f8258753eb39bfdb5224e6a1724567dd9]: distroless_python3
   : True
 
 
@@ -92,7 +92,7 @@ class DistrolessMixin:
   test -s "$TMP/out/localtime" && echo "non-empty"
   #+end_src
 
-  #+RESULTS[3d90657054fd995231b339ed7b0a37c620a3c7bd]: distroless_static_export
+  #+RESULTS[9c472a02cf73216f643fb85176218b98b2015dad]: distroless_static_export
   : non-empty
 
 

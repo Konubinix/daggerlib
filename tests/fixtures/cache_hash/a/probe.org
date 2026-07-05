@@ -1,0 +1,7 @@
+#+TITLE: cache-hash probe fixture
+#+PROPERTY: header-args:bash :tangle no :dir ".." :results verbatim :cache yes
+
+#+NAME: probe
+#+begin_src bash
+echo probe
+#+end_src

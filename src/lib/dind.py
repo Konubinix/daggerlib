@@ -97,7 +97,8 @@ class DindMixin:
             dagger.Directory,
             DefaultPath("."),
             Ignore(["**",
-                    "!src/lib/", "!sdk/", "!tests/", "!examples/",
+                    "!src/", "!sdk/", "!tests/", "!examples/",
+                    "!*.org", "!*.sh", "!*.el",
                     "!dagger.json", "!.daggerignore", "!pyproject.toml",
                     "!test-host.sh"]),
         ],
@@ -105,9 +106,9 @@ class DindMixin:
         """Run the project test suite inside Docker-in-Docker (dogfooding).
 
         Builds a test-ready container from the DinD base, installs Python,
-        pytest, and the Dagger CLI, mounts the project source, and runs
-        ./test-host.sh with dockerd available.
-        Source is mounted last so package installs are cached.
+        pytest, the Dagger CLI, and emacs, mounts the project source, and
+        runs ./test-host.sh with dockerd available.  Source is mounted last
+        so package installs are cached.
         """
         ctr = self.dind_container()
         ctr = (
@@ -116,6 +117,7 @@ class DindMixin:
             .with_exec([
                 "apt-get", "install", "--yes",
                 "curl", "python3", "python3-pip", "python3-venv",
+                "emacs-nox", "git",
             ])
             .with_exec([
                 "pip3", "install", "--break-system-packages",
@@ -129,6 +131,7 @@ class DindMixin:
             .with_directory("/work", src)
             .with_workdir("/work")
             .with_directory("/work/.git", dag.directory())
+            .with_mounted_cache("/work/.tangle-deps", dag.cache_volume("tangle-deps"))
         )
         cmd = (
             "echo '=== dockerd ready ===' && "

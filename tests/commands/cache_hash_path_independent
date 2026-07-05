@@ -1,0 +1,7 @@
+fa=tests/fixtures/cache_hash/a/probe.org
+fb=tests/fixtures/cache_hash/a/b/probe.org
+test -s "$fa" && test -s "$fb" || { echo MISSING_FIXTURE; exit 1; }
+./run-host.sh "$fa" "$fb" >/dev/null 2>&1 || { echo RUN_FAILED; exit 1; }
+ha=$(grep -oE '#\+RESULTS\[[0-9a-f]+\]' "$fa" | head -1)
+hb=$(grep -oE '#\+RESULTS\[[0-9a-f]+\]' "$fb" | head -1)
+{ [ -n "$ha" ] && [ "$ha" = "$hb" ] && echo equal; } || echo "differ: a=$ha b=$hb"

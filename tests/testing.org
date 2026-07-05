@@ -170,3 +170,29 @@ each one, and compares stdout to the expected output.
         exec "$DAGGER_PATH" --silent "${args[@]}"
     fi
   #+end_src
+
+* Cache hashes are path-independent
+  :PROPERTIES:
+  :ID:       f2a7c1d3-4b6e-4a90-8c12-5d7e9f0a1b23
+  :END:
+
+  A block's =:dir= says where it runs.  Written as an absolute path it
+  would leak the checkout location into org-babel's =:cache= hash, so the
+  same block would carry a different =#+RESULTS[<hash>]= on each machine —
+  churn no one asked for.  We keep =:dir= relative so the hash depends on
+  the block, not the path.  To pin that, two fixtures hold an identical
+  block at different directory depths and must hash to the same value.
+
+  #+NAME: cache_hash_path_independent
+  #+begin_src bash :tangle (daggerlib-auto-test) :comments no :padline no
+  fa=tests/fixtures/cache_hash/a/probe.org
+  fb=tests/fixtures/cache_hash/a/b/probe.org
+  test -s "$fa" && test -s "$fb" || { echo MISSING_FIXTURE; exit 1; }
+  ./run-host.sh "$fa" "$fb" >/dev/null 2>&1 || { echo RUN_FAILED; exit 1; }
+  ha=$(grep -oE '#\+RESULTS\[[0-9a-f]+\]' "$fa" | head -1)
+  hb=$(grep -oE '#\+RESULTS\[[0-9a-f]+\]' "$fb" | head -1)
+  { [ -n "$ha" ] && [ "$ha" = "$hb" ] && echo equal; } || echo "differ: a=$ha b=$hb"
+  #+end_src
+
+  #+RESULTS: cache_hash_path_independent
+  : equal

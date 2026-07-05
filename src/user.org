@@ -1,7 +1,7 @@
 #+TITLE: Non-root user workflows
 #+LANGUAGE: en
 #+PROPERTY: header-args:python :tangle no
-#+PROPERTY: header-args:bash   :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
+#+PROPERTY: header-args:bash   :tangle no :dir ".." :results verbatim :cache yes
 
 Running containers as root is a security risk. I need reusable helpers
 to create users, switch to them, and set up their environment — without
@@ -149,7 +149,7 @@ class UserMixin:
   dagger call alpine-user with-exec --args="whoami" stdout
   #+end_src
 
-  #+RESULTS[ad9da65b74b43a18ff32b4a91de1c86996df313f]: use_user_whoami
+  #+RESULTS[1acc4c6c70404558374b426a9648f9a2470f9d70]: use_user_whoami
   : sam
 
 
@@ -158,6 +158,6 @@ class UserMixin:
   dagger call alpine-user with-exec --args="pwd" stdout
   #+end_src
 
-  #+RESULTS[780d9bdf1bf469c680666d68cda40f708f648318]: use_user_workdir
+  #+RESULTS[d05a72b1fd3e6bdca672e050c358937fc1d66457]: use_user_workdir
   : /home/sam
 

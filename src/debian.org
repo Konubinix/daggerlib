@@ -1,7 +1,7 @@
 #+TITLE: Debian-based production containers
 #+LANGUAGE: en
 #+PROPERTY: header-args:python :tangle no
-#+PROPERTY: header-args:bash   :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
+#+PROPERTY: header-args:bash   :tangle no :dir ".." :results verbatim :cache yes
 
 Some of my services need libraries or tools that are only well-packaged
 on Debian. I want Debian slim containers with the same defaults as my
@@ -115,7 +115,7 @@ class DebianMixin:
   dagger call debian with-exec --args="sh","-c","readlink -f /etc/localtime" stdout
   #+end_src
 
-  #+RESULTS[08ec2ffc05ae8b3b04904038b70558a1cecd917c]: debian_timezone
+  #+RESULTS[f560996fec8226de43196befd7e41874141bdeea]: debian_timezone
   : /usr/share/zoneinfo/Europe/Paris
 
 
@@ -124,7 +124,7 @@ class DebianMixin:
   dagger call debian with-exec --args="cat","/etc/apt/apt.conf.d/01norecommend" stdout
   #+end_src
 
-  #+RESULTS[1b7a039f1713fc62a45e2a14c553d57dcfdede88]: debian_no_recommends
+  #+RESULTS[aaa9d65a7d1a7c134ae2854b558dce108328b017]: debian_no_recommends
   : APT::Install-Recommends "0";
   : APT::Install-Suggests "0";
 
@@ -134,7 +134,7 @@ class DebianMixin:
   dagger call debian --distro-packages=curl with-exec --args="which","curl" stdout
   #+end_src
 
-  #+RESULTS[65214f73ae9608be858e854a56c6b4bc18edf4d8]: debian_distro_packages
+  #+RESULTS[7968beeac73d41bf0b6a36a8c1ea559eb297097a]: debian_distro_packages
   : /usr/bin/curl
 
 
@@ -156,7 +156,7 @@ class DebianMixin:
   dagger call debian-user with-exec --args="id","sam" stdout
   #+end_src
 
-  #+RESULTS[6eac25d581af95ef511a77254bdbff450051ae5d]: debian_user_check
+  #+RESULTS[18f88d39e62e24b9f4821fe0e47ef192f92cdcae]: debian_user_check
   : uid=1000(sam) gid=1000(sam) groups=1000(sam),100(users)
 
 
@@ -186,7 +186,7 @@ class DebianMixin:
   dagger call debian-python-user-venv with-exec --args="sh","-c","test -d /app/venv && /app/venv/bin/python --version" stdout
   #+end_src
 
-  #+RESULTS[772ddd8e7f9505b249f4a45b6e3ac1ed9390017c]: debian_python_user_venv_check
+  #+RESULTS[cfcef10daa806e6fcb502e1a1b1a9d9fd05a3ca7]: debian_python_user_venv_check
   : Python 3.13.5
 
 
@@ -215,7 +215,7 @@ class DebianMixin:
   test -s "$TMP/out/localtime" && echo "non-empty"
   #+end_src
 
-  #+RESULTS[8f46140f1cb03ce54c3b1f855d7145b9c5537611]: debian_localtime_export
+  #+RESULTS[2eabf4e67d1a44f747b096b127044d4b270d8d15]: debian_localtime_export
   : non-empty
 
 

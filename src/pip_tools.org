@@ -4,7 +4,7 @@
 #+TITLE: Python dependency management
 #+LANGUAGE: en
 #+PROPERTY: header-args:python :tangle no
-#+PROPERTY: header-args:bash   :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
+#+PROPERTY: header-args:bash   :tangle no :dir ".." :results verbatim :cache yes
 
 I manage Python dependencies with =pip-tools= (=pip-compile= and
 =pip-sync=). I need a ready-made container with these tools installed
@@ -52,7 +52,7 @@ class PipToolsMixin:
   dagger call pip-tools with-exec --args="which","pip-compile" stdout
   #+end_src
 
-  #+RESULTS[411e2342d105eada0a7a1a0e56e27b8fdcd1d4bc]: pip_tools_available
+  #+RESULTS[8cc2f5e93a555e76c75ff3a2b00560fcca2ff7c7]: pip_tools_available
   : /home/sam/.local/bin/pip-compile
 
 

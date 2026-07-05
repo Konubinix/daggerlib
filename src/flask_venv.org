@@ -1,7 +1,7 @@
 #+TITLE: Ready-made Flask virtualenv
 #+LANGUAGE: en
 #+PROPERTY: header-args:python :tangle no
-#+PROPERTY: header-args:bash   :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
+#+PROPERTY: header-args:bash   :tangle no :dir ".." :results verbatim :cache yes
 
 I often build small Flask APIs. Instead of repeating the venv setup in
 every project, I want a pre-built virtualenv with Flask installed that
@@ -43,6 +43,6 @@ class FlaskMixin:
   test -f "$TMP/out/bin/flask" && echo "bin/flask exists"
   #+end_src
 
-  #+RESULTS[7933ceb8faa5b4df0c2842207073692e95071403]: flask_venv_export
+  #+RESULTS[6f1b0530be5d2f0ade87c3ac36514125d272b74d]: flask_venv_export
   : bin/flask exists
 

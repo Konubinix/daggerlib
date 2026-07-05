@@ -4,7 +4,7 @@
 #+TITLE: Docker inside containers
 #+LANGUAGE: en
 #+PROPERTY: header-args:python :tangle no
-#+PROPERTY: header-args:bash   :tangle no :dir (expand-file-name ".." default-directory) :results verbatim :cache yes
+#+PROPERTY: header-args:bash   :tangle no :dir ".." :results verbatim :cache yes
 
 Some CI pipelines and integration tests need to build or run Docker
 images. I run Docker as a [[https://github.com/dagger/dagger/discussions/12595][sidecar service]]: the official =docker:dind=
@@ -224,7 +224,11 @@ class DindMixin:
 
   Dogfooding: build a container that has everything needed to run the
   project tests (Python, pytest, Dagger CLI) on top of the DinD base,
-  then execute =./test-host.sh= with dockerd available.
+  then execute =./test-host.sh= with dockerd available.  Some tests
+  drive the org-babel run pipeline (=run-host.sh=) directly to check the
+  tooling itself, so the container also carries emacs, git, and the
+  =.tangle-deps= cache — letting those tests run in-place instead of
+  paying a nested =dagger call= to reach an emacs.
 
   #+NAME: dind-run-tests
   #+begin_src python
@@ -235,7 +239,8 @@ class DindMixin:
           dagger.Directory,
           DefaultPath("."),
           Ignore(["**",
-                  "!src/lib/", "!sdk/", "!tests/", "!examples/",
+                  "!src/", "!sdk/", "!tests/", "!examples/",
+                  "!*.org", "!*.sh", "!*.el",
                   "!dagger.json", "!.daggerignore", "!pyproject.toml",
                   "!test-host.sh"]),
       ],
@@ -243,9 +248,9 @@ class DindMixin:
       """Run the project test suite inside Docker-in-Docker (dogfooding).
 
       Builds a test-ready container from the DinD base, installs Python,
-      pytest, and the Dagger CLI, mounts the project source, and runs
-      ./test-host.sh with dockerd available.
-      Source is mounted last so package installs are cached.
+      pytest, the Dagger CLI, and emacs, mounts the project source, and
+      runs ./test-host.sh with dockerd available.  Source is mounted last
+      so package installs are cached.
       """
       ctr = self.dind_container()
       ctr = (
@@ -254,6 +259,7 @@ class DindMixin:
           .with_exec([
               "apt-get", "install", "--yes",
               "curl", "python3", "python3-pip", "python3-venv",
+              "emacs-nox", "git",
           ])
           .with_exec([
               "pip3", "install", "--break-system-packages",
@@ -267,6 +273,7 @@ class DindMixin:
           .with_directory("/work", src)
           .with_workdir("/work")
           .with_directory("/work/.git", dag.directory())
+          .with_mounted_cache("/work/.tangle-deps", dag.cache_volume("tangle-deps"))
       )
       cmd = (
           "echo '=== dockerd ready ===' && "
@@ -533,7 +540,7 @@ class DindMixin:
   dagger call dind-with-docker --cmd="docker info --format '{{.OSType}}'" stdout
   #+end_src
 
-  #+RESULTS[ed3d4f41d5700e5de924ac245559d5a3578e180e]: dind_docker_info
+  #+RESULTS[75f542a33f30c0c7b0fb195494cc3b66b8ed2017]: dind_docker_info
   : linux
 
 
