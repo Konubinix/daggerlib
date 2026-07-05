@@ -1,1 +1,0 @@
-dagger call debian --distro-packages=python3-yaml with-file --path=/tmp/ralph.yml --source=src/ralph.yml with-exec --args="python3","-c","import yaml; d=yaml.safe_load(open('/tmp/ralph.yml')); print(d['event_loop']['starting_event']); print(len(d['hats']))" stdout

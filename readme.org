@@ -35,11 +35,6 @@ that builds on top of Dagger.
   the cgroup setup, tmpfs mounts, and dockerd lifecycle so I don't have
   to think about it.
 
-  For automated development tasks, [[file:src/ralph.org][Ralph]] runs the ralph-orchestrator
-  inside a container with Claude Code, picking tasks from a todo list,
-  implementing them, running tests, and committing — all without
-  human intervention.
-
   All of this is verified by [[file:tests/testing.org][automated tests]] that exercise every target
   via =dagger call=.
 

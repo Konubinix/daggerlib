@@ -1,1 +1,0 @@
-ralph-log-filter < tests/ralph_log_sample.txt 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g'

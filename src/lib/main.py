@@ -11,7 +11,6 @@ from .flask_venv import FlaskMixin
 from .pins import PinsMixin
 from .pip_tools import PipToolsMixin
 from .python import PythonMixin
-from .ralph import RalphMixin
 from .user import UserMixin
 
 
@@ -26,7 +25,6 @@ class Lib(
     FlaskMixin,
     PipToolsMixin,
     PinsMixin,
-    RalphMixin,
 ):
     alpine_version: str = "3.23"
     debian_version: str = "13"
